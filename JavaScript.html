@@ -5,10 +5,12 @@
   let activeCollections = []; 
   let allUniqueOwnerNamesGlobal = []; 
   let fulfillmentStatusOptions = [];
-  let orderIssueOptions = [];
+  let orderIssueOptions = []; 
+  let outfitsRawOriginalOptions = []; 
+  let unavailableNotesOptions = [];    
   let swapDropdownOptions = [];
   let uniqueOwnerNamesForFilter = []; 
-  let outfitOptionsForCollection = []; // This will be populated by onOutfitOptionsLoaded
+  let outfitOptionsForCollection = []; 
   let productCategories = {};
   let allSizeOptions = { standard: [], waist: [], sock: [], accessoryHat: [], kids: [], bottomWInseam: [], bottomInWInseam: [] };
   let newPieceCounter = 0;
@@ -50,6 +52,17 @@
         return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
    }
 
+   // <<< NEW UTILITY FUNCTION >>>
+   function unescapeHtml(safe) {
+        if (safe === null || typeof safe === 'undefined') return '';
+        return safe.toString()
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, "\"")
+            .replace(/&#039;/g, "'");
+    }
+
    function readFileAsBase64(file) {
         return new Promise((resolve, reject) => {
             if (!file) { resolve(null); return; }
@@ -87,6 +100,9 @@
 
     populateCollectionSelector(); 
     populateFilterDropdowns();
+    populateOrderIssueFilterDropdown(); 
+    populateOutfitsRawOriginalFilterDropdown(); 
+    populateUnavailableNotesFilterDropdown(); 
     populateOwnerFilterDropdown(allUniqueOwnerNamesGlobal); 
     populateModalDropdownOptions();
     populateSwapDropdownOptionsModal();
@@ -138,6 +154,44 @@
     statusFilter.find('option:not([value=""])').remove(); 
     fulfillmentStatusOptions.forEach(opt => statusFilter.append($('<option>', { value: opt.value, text: opt.value })));
   }
+
+  function populateOrderIssueFilterDropdown() {
+      const issueFilterSelect = $('#filterOrderIssue');
+      issueFilterSelect.empty(); 
+      issueFilterSelect.append($('<option>', { value: "", text: "-- All Issues --" }));
+      if (orderIssueOptions && orderIssueOptions.length > 0) {
+          orderIssueOptions.forEach(opt => {
+              if (opt && typeof opt.value !== 'undefined') { 
+                  issueFilterSelect.append($('<option>', { value: opt.value, text: opt.value }));
+              }
+          });
+      }
+  }
+
+  function populateOutfitsRawOriginalFilterDropdown() {
+      const select = $('#filterNumOutfits');
+      select.empty();
+      select.append($('<option>', { value: "", text: "-- All --" }));
+      if (outfitsRawOriginalOptions && outfitsRawOriginalOptions.length > 0) {
+          outfitsRawOriginalOptions.forEach(val => {
+              select.append($('<option>', { value: val, text: val })); // MODIFIED: Use raw val for text
+          });
+      }
+      select.prop('disabled', !(outfitsRawOriginalOptions && outfitsRawOriginalOptions.length > 0) || (currentCollectionName === '_all_active_') || !currentCollectionName);
+  }
+
+  function populateUnavailableNotesFilterDropdown() {
+      const select = $('#filterUnavailableNotes');
+      select.empty();
+      select.append($('<option>', { value: "", text: "-- All --" }));
+      if (unavailableNotesOptions && unavailableNotesOptions.length > 0) {
+          unavailableNotesOptions.forEach(val => {
+              select.append($('<option>', { value: val, text: val })); // MODIFIED: Use raw val for text
+          });
+      }
+      select.prop('disabled', !(unavailableNotesOptions && unavailableNotesOptions.length > 0) || (currentCollectionName === '_all_active_') || !currentCollectionName);
+  }
+
 
   function populateOwnerFilterDropdown(owners) {
     const ownerSelect = $('#filterOwnerSelect');
@@ -343,7 +397,7 @@
             currentCollectionName = '_all_active_';
             $('#ordersArea, #inventoryArea').hide();
             $('#filtersCard').show(); 
-            $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', true);
+            $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', true);
             $('#applyFiltersBtn, #clearFiltersBtn').prop('disabled', true);
 
 
@@ -363,13 +417,13 @@
             $('#ordersArea').show();
             $('#inventoryArea').hide();
             $('#filtersCard').show();
-             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', false);
+             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', false); 
             $('#applyFiltersBtn, #clearFiltersBtn').prop('disabled', false);
 
             $('#mainDashboardStatsArea').show(); 
 
             showLoading('Loading owners for ' + escapeHtml(currentCollectionName) + '...');
-            google.script.run
+            google.script.run 
                 .withSuccessHandler(function(owners) {
                     hideLoading();
                     uniqueOwnerNamesForFilter = owners; 
@@ -383,7 +437,7 @@
             $('#ordersTableBody, #paginationControlsTop, #paginationControlsBottom, #inventoryContent').empty();
             $('#ordersArea, #inventoryArea').hide();
             $('#filtersCard').show(); 
-            $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', true);
+            $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', true); 
             $('#applyFiltersBtn, #clearFiltersBtn').prop('disabled', true);
 
             $('#initialMessage').text('Please select a collection to view orders or "All Active Collections" for overall metrics.').show();
@@ -400,8 +454,8 @@
       $('#applyFiltersBtn').off('click').on('click', applyFiltersAndLoad);
       $('#clearFiltersBtn').off('click').on('click', function() { clearFilters(true); });
 
-
-      $('#filterOwnerSelect, #filterStatus, #filterStartDate, #filterEndDate').off('change').on('change', applyFiltersAndLoad);
+      $('#filterOwnerSelect, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate').off('change').on('change', applyFiltersAndLoad);
+      
       $('#filterName, #filterEmail').off('keypress').on('keypress', function(e) {
           if (e.which === 13) { 
               applyFiltersAndLoad();
@@ -417,7 +471,7 @@
         if (currentMissingLastNameFilterActive) {
             $(this).removeClass('btn-orange').addClass('active btn-success'); 
         } else {
-            $(this).removeClass('active btn-success').addClass('btn-orange');
+            $(this).removeClass('active btn-success').addClass('btn-orange'); 
         }
         applyFiltersAndLoad(); 
     });
@@ -427,13 +481,12 @@
       $('#orderDetailsModal').off('hidden.bs.modal').on('hidden.bs.modal', clearEditHighlight);
       $('#saveOrderDetailsBtn').off('click').on('click', saveOrderDetails);
 
-      // Listener for "2 outfits?" checkbox
       $('#modalTwoOutfitsCheckbox').off('change').on('change', function() {
             if ($(this).is(':checked')) {
                 $('#modalOutfitOrdered2Container').slideDown();
             } else {
                 $('#modalOutfitOrdered2Container').slideUp();
-                $('#modalOutfitOrdered2').val(''); // Clear selection when hiding
+                $('#modalOutfitOrdered2').val('');
             }
       });
 
@@ -452,11 +505,11 @@
         $('#mainDashboardStatsArea').show(); 
         if (currentCollectionName && currentCollectionName !== '_all_active_') {
              $('#filtersCard, #ordersArea').show();
-             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #applyFiltersBtn, #clearFiltersBtn, #filterMissingLastNameBtn').prop('disabled', false);
+             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #applyFiltersBtn, #clearFiltersBtn, #filterMissingLastNameBtn').prop('disabled', false); 
              $('#initialMessage').hide();
         } else { 
             $('#ordersArea').hide(); 
-             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #applyFiltersBtn, #clearFiltersBtn, #filterMissingLastNameBtn').prop('disabled', true);
+             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #applyFiltersBtn, #clearFiltersBtn, #filterMissingLastNameBtn').prop('disabled', true); 
             $('#initialMessage').show(); 
         }
         clearMessages(); 
@@ -631,6 +684,8 @@
         $('#ordersTableBody, #paginationControlsTop, #paginationControlsBottom').empty();
         $('#ordersArea').hide();
         $('#initialMessage').text('Select a specific collection to view orders.').show();
+        $('#filterNumOutfits').empty().append('<option value="">-- All --</option>').prop('disabled', true); 
+        $('#filterUnavailableNotes').empty().append('<option value="">-- All --</option>').prop('disabled', true);
         const activeNames = activeCollections.map(c => c.name);
         if(activeNames.length > 0) loadMainDashboardData(activeNames); 
         return;
@@ -641,11 +696,35 @@
     $('#paginationControlsTop, #paginationControlsBottom').empty();
     $('#inventoryContent').empty(); 
 
+    $('#filterNumOutfits').empty().append('<option value="">Loading...</option>').prop('disabled', true);
+    $('#filterUnavailableNotes').empty().append('<option value="">Loading...</option>').prop('disabled', true);
+
     loadOrdersOnly(collectionName); 
     loadMainDashboardData([collectionName]); 
     google.script.run.withSuccessHandler(onOutfitOptionsLoaded).withFailureHandler(onFailure).getInventoryByCollection(collectionName); 
     clearMessages();
+
+    google.script.run
+        .withSuccessHandler(onOutfitsRawOriginalValuesLoaded)
+        .withFailureHandler(onFailure)
+        .getUniqueOutfitsRawOriginalValues(collectionName);
+
+    google.script.run
+        .withSuccessHandler(onUnavailableNotesValuesLoaded)
+        .withFailureHandler(onFailure)
+        .getUniqueUnavailableNotesValues(collectionName);
   }
+
+  function onOutfitsRawOriginalValuesLoaded(uniqueValues) {
+    outfitsRawOriginalOptions = uniqueValues || [];
+    populateOutfitsRawOriginalFilterDropdown(); 
+  }
+
+  function onUnavailableNotesValuesLoaded(uniqueValues) {
+    unavailableNotesOptions = uniqueValues || [];
+    populateUnavailableNotesFilterDropdown(); 
+  }
+
 
   function loadOrdersOnly(collectionName) {
       if (isLoadingOrders) return;
@@ -705,30 +784,25 @@
       totalOrders = 0; renderPaginationControls(); 
   }
 
-  // This function is CALLED when getInventoryByCollection SUCCEEDS
-  // It populates the global outfitOptionsForCollection AND the dropdowns
   function onOutfitOptionsLoaded(inventoryData) { 
     const outfitSelect = $('#modalOutfitOrdered');
     const outfitSelect2 = $('#modalOutfitOrdered2'); 
-    const currentVal1 = outfitSelect.val(); // Preserve current selection if possible for first dropdown
-    const currentVal2 = outfitSelect2.val(); // Preserve current selection for second dropdown
+    const currentVal1 = outfitSelect.val(); 
+    const currentVal2 = outfitSelect2.val(); 
 
     outfitSelect.find('option:not([value=""]):not([value="N/A"]):not([value="ALL"])').remove(); 
     outfitSelect2.find('option:not([value=""]):not([value="N/A"]):not([value="ALL"])').remove(); 
 
-    // Update the global variable with the fresh data
     outfitOptionsForCollection = (inventoryData || []) 
         .filter(o => o.isActive === true) 
         .map(o => o.name)
         .sort((a,b) => a.localeCompare(b, undefined, {numeric: true})); 
 
-    // Populate dropdowns using the freshly updated global variable
     outfitOptionsForCollection.forEach(name => {
         outfitSelect.append($('<option>', {value: name, text: name}));
         outfitSelect2.append($('<option>', {value: name, text: name})); 
     });
 
-    // Restore previous selections if they are still valid in the new list
     if(outfitOptionsForCollection.includes(currentVal1)) outfitSelect.val(currentVal1); else outfitSelect.val('');
     if(outfitOptionsForCollection.includes(currentVal2)) outfitSelect2.val(currentVal2); else outfitSelect2.val('');
   }
@@ -739,6 +813,9 @@
     const owner = $('#filterOwnerSelect').val();
     const nameSearch = $('#filterName').val().trim();
     const status = $('#filterStatus').val();
+    const orderIssue = $('#filterOrderIssue').val(); 
+    const outfitsRawOriginal = $('#filterNumOutfits').val();        
+    const unavailableNotes = $('#filterUnavailableNotes').val();  
     const startDate = $('#filterStartDate').val(); 
     const endDate = $('#filterEndDate').val();   
     const emailSearch = $('#filterEmail').val().trim();
@@ -747,6 +824,9 @@
     if (owner) filters.owner = owner;
     if (nameSearch) filters.nameSearch = nameSearch;
     if (status) filters.status = status;
+    if (orderIssue) filters.orderIssue = orderIssue; 
+    if (outfitsRawOriginal) filters.outfitsRawOriginal = outfitsRawOriginal; 
+    if (unavailableNotes) filters.unavailableNotes = unavailableNotes;       
     
     if (startDate) filters.dateRangeStart = startDate; 
     if (endDate) filters.dateRangeEnd = endDate;     
@@ -769,6 +849,9 @@
     $('#filterName').val('');
     $('#filterEmail').val('');
     $('#filterStatus').val('');
+    $('#filterOrderIssue').val(''); 
+    $('#filterNumOutfits').val('');         
+    $('#filterUnavailableNotes').val('');   
     $('#filterStartDate').val(''); 
     $('#filterEndDate').val('');   
     $('#stockFilterAll').prop('checked', true).parent().addClass('active').siblings().removeClass('active'); 
@@ -782,6 +865,8 @@
       applyFiltersAndLoad();
     } else if (triggerLoad && (!currentCollectionName || currentCollectionName === '_all_active_')) {
       $('#ordersTableBody, #paginationControlsTop, #paginationControlsBottom').empty();
+      populateOutfitsRawOriginalFilterDropdown(); 
+      populateUnavailableNotesFilterDropdown(); 
       if (currentCollectionName === '_all_active_') {
         $('#ordersArea').hide();
         $('#initialMessage').text('Displaying Key Metrics for All Active Collections. Select a specific collection to view orders.').show();
@@ -835,20 +920,31 @@
         const inseamForHighlight = orderData.INSEAM ? orderData.INSEAM.toString().trim() : "";
         const outfitsRawForHighlight = orderData.OutfitsRawOriginal ? orderData.OutfitsRawOriginal.toString().trim() : "";
         const generalNotesForHighlight = orderData.GeneralNotes ? orderData.GeneralNotes.toString().trim() : "";
+        const unavailableNotesForHighlight = orderData.OutfitUnavailableNotes ? orderData.OutfitUnavailableNotes.toString().trim() : "";
+
 
         if (inseamForHighlight) {
             highlightParts.push(`<strong>INSEAM:</strong> ${escapeHtml(inseamForHighlight)}`);
         }
         if (outfitsRawForHighlight) {
-            highlightParts.push(`<strong># Outfits:</strong> ${escapeHtml(outfitsRawForHighlight)}`);
+            // MODIFIED for highlight display
+            highlightParts.push(`<strong># Outfits:</strong> ${escapeHtml(unescapeHtml(outfitsRawForHighlight))}`);
         }
         if (generalNotesForHighlight) {
             let generalNotesSnippet = generalNotesForHighlight;
             if (generalNotesSnippet.length > 100) { 
                 generalNotesSnippet = generalNotesSnippet.substring(0, 97) + "...";
             }
-            highlightParts.push(`<strong>General Notes:</strong> ${escapeHtml(generalNotesSnippet)}`);
+            highlightParts.push(`<strong>General Notes:</strong> ${escapeHtml(unescapeHtml(generalNotesSnippet))}`);
         }
+         if (unavailableNotesForHighlight) { // For modal highlights consistency
+            let unavailableNotesSnippet = unavailableNotesForHighlight;
+            if (unavailableNotesSnippet.length > 70) { // Shorter snippet for this one
+                unavailableNotesSnippet = unavailableNotesSnippet.substring(0, 67) + "...";
+            }
+            highlightParts.push(`<strong>Unavailable:</strong> ${escapeHtml(unescapeHtml(unavailableNotesSnippet))}`);
+        }
+
 
         if (highlightParts.length > 0) {
             highlightsDiv.html(`<p class="modal-title-note-relocated">${highlightParts.join(' &nbsp; | &nbsp; ')}</p>`); 
@@ -899,12 +995,12 @@
         });
 
         const numOutfitsTextarea = $('#modalNumOutfits');
-        numOutfitsTextarea.val(outfitsRawForHighlight);
+        numOutfitsTextarea.val(unescapeHtml(outfitsRawForHighlight)); // MODIFIED to unescape
         if (outfitsRawForHighlight.trim() !== '') { numOutfitsTextarea.addClass('highlight-green-bold'); } else { numOutfitsTextarea.removeClass('highlight-green-bold'); }
         numOutfitsTextarea.off('input.outfitsHighlight').on('input.outfitsHighlight', function() { if ($(this).val().trim() !== '') { $(this).addClass('highlight-green-bold'); } else { $(this).removeClass('highlight-green-bold'); } });
 
-        $('#modalGeneralNotes').val(orderData.GeneralNotes || ''); 
-        $('#modalOutfitUnavailableNotes').val(orderData.OutfitUnavailableNotes || '');
+        $('#modalGeneralNotes').val(unescapeHtml(orderData.GeneralNotes || '')); // MODIFIED to unescape
+        $('#modalOutfitUnavailableNotes').val(unescapeHtml(orderData.OutfitUnavailableNotes || '')); // MODIFIED to unescape
 
         const prefsList = $('#modalPreferencesList'); prefsList.empty();
         if (orderData.preferenceStockStatus && orderData.preferenceStockStatus.length > 0) {
@@ -937,26 +1033,23 @@
              });
         } else { prefsList.append('<p class="text-muted">No outfit preferences listed for this order.</p>'); }
 
-        // Handle "2 outfits?" checkbox and dropdowns
         const twoOutfitsCheckbox = $('#modalTwoOutfitsCheckbox');
         const outfitOrdered1Select = $('#modalOutfitOrdered');
         const outfitOrdered2Select = $('#modalOutfitOrdered2');
         const outfitOrdered2Container = $('#modalOutfitOrdered2Container');
 
-        // Dropdowns are populated once when collection inventory loads (by onOutfitOptionsLoaded)
-        // Here, we just set their values.
         const outfitOrderedString = orderData.OutfitOrdered || "";
         if (outfitOrderedString.includes(',')) {
             const parts = outfitOrderedString.split(',');
             outfitOrdered1Select.val(parts[0] ? parts[0].trim() : '');
             outfitOrdered2Select.val(parts[1] ? parts[1].trim() : '');
             twoOutfitsCheckbox.prop('checked', true);
-            outfitOrdered2Container.show(); // Ensure it's visible if two outfits
+            outfitOrdered2Container.show(); 
         } else {
             outfitOrdered1Select.val(outfitOrderedString);
-            outfitOrdered2Select.val(''); // Clear second dropdown
+            outfitOrdered2Select.val(''); 
             twoOutfitsCheckbox.prop('checked', false);
-            outfitOrdered2Container.hide(); // Ensure it's hidden if one or no outfit
+            outfitOrdered2Container.hide(); 
         }
         
         let dateOrderedDisplayStr = ""; 
@@ -991,6 +1084,11 @@
         $('#orderDetailsModal').modal('show');
     }
 
+  // ... (Rest of the JavaScript.html file remains unchanged from saveOrderDetails onwards)
+  // ... Make sure to include all the functions from the previous version like saveOrderDetails,
+  // onOrderSaveSuccess, onOrderSaveFailure, inventory functions, product/collection management,
+  // CSV/Raw data functions, and onFailure.
+  
     function saveOrderDetails() {
         $('#modalSpinner').show(); $('#saveOrderDetailsBtn').prop('disabled', true); clearMessages();
         
@@ -1015,13 +1113,13 @@
         }
 
         let outfit1Value = tempFormData['OutfitOrdered'] ? String(tempFormData['OutfitOrdered']).trim() : "";
-        let outfit2Value = $('#modalTwoOutfitsCheckbox').is(':checked') ? (tempFormData['OutfitOrdered2'] ? String(tempFormData['OutfitOrdered2']).trim() : "") : ""; // Only consider outfit2 if checkbox is checked
+        let outfit2Value = $('#modalTwoOutfitsCheckbox').is(':checked') ? (tempFormData['OutfitOrdered2'] ? String(tempFormData['OutfitOrdered2']).trim() : "") : ""; 
 
         let finalOutfitOrdered = outfit1Value;
-        if (outfit2Value) { // If outfit2Value has content (meaning checkbox was checked and it had a value)
-            if (finalOutfitOrdered) { // If outfit1 also has content
+        if (outfit2Value) { 
+            if (finalOutfitOrdered) { 
                 finalOutfitOrdered += ", " + outfit2Value;
-            } else { // If outfit1 was empty, but outfit2 has content
+            } else { 
                 finalOutfitOrdered = outfit2Value;
             }
         }
@@ -1050,19 +1148,14 @@
         console.log("Save Logic - Original DateOrdered String:", `'${originalDateOrderedString}'`);
 
         if (omsIdFromForm && omsIdFromForm !== originalOmsId) {
-            // OMS ID's value has changed from a non-empty original to a different non-empty value, OR
-            // OMS ID was empty and is now filled.
             const now = new Date();
             const pad = (num) => (num < 10 ? '0' : '') + num;
             newDateOrderedValue = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
             console.log("Date Ordered updated: OMS_ID changed or newly filled. New Date:", newDateOrderedValue);
         } else if (!omsIdFromForm && originalOmsId) {
-            // OMS ID was filled and is now cleared
             newDateOrderedValue = "";
             console.log("Date Ordered cleared: OMS_ID was removed.");
         }
-        // Else: OMS ID is the same as original (either both were empty, or both were the same non-empty value).
-        // In this case, newDateOrderedValue remains originalDateOrderedString.
         else {
              console.log("Date Ordered unchanged: OMS_ID state did not trigger update/clear. Kept:", newDateOrderedValue);
         }
@@ -1095,7 +1188,6 @@
              displayMessage(result.message || 'Failed to save order.', 'danger', 0); 
         }
     }
-  // ... (The rest of your JavaScript code: onOrderSaveFailure, inventory functions, product management, collection management, CSV, Raw Data, onFailure, etc.) ...
     function onOrderSaveFailure(error) { $('#modalSpinner').hide(); $('#saveOrderDetailsBtn').prop('disabled', false); onFailure(error); displayMessage('Error saving order details. See console/logs.', 'danger', 0); }
 
     function loadInventoryData(collectionName) {
