@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fabletics - Historical Order Viewer</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+      body {
+        padding-top: 20px;
+        background-color: #f0f2f5;
+      }
+      .container {
+        max-width: 1400px;
+      }
+      #loadingIndicatorHist {
+        display: none;
+        text-align: center;
+        padding: 20px;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1060;
+        background: rgba(255,255,255,0.9);
+        border-radius: 8px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+      }
+      .table th {
+        white-space: nowrap;
+        background-color: #e9ecef;
+      }
+      .action-buttons .btn {
+        margin-left: 5px;
+      }
+      .action-buttons .btn:first-child {
+        margin-left: 0;
+      }
+      .inventory-card-img-placeholder {
+        width:100%;
+        height:150px;
+        background-color:#e9ecef;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:0.8em;
+        border-bottom: 1px solid #ddd;
+        color: #6c757d;
+      }
+      .card-title {
+        font-size: 1.15rem;
+      }
+      .card-subtitle {
+        font-size: 0.95rem;
+      }
+      .piece-details {
+        font-size: 0.88em;
+        padding-left: 10px;
+        border-left: 2px solid #f1f1f1;
+        margin-bottom: 0.5rem;
+      }
+      .piece-details strong {
+        color: #333;
+      }
+      .note-text {
+        font-style: italic;
+        color: #555;
+        font-size: 0.9em;
+      }
+      .swap-info {
+        font-size: 0.85em;
+        color: #0069d9;
+      }
+      #historicalInventoryContent .card.h-100 {
+        display: flex;
+        flex-direction: column;
+      }
+       #historicalInventoryContent .card.h-100 .card-body {
+        flex-grow: 1;
+      }
+
+      /* Dashboard Card Styling */
+      #historicalDashboardArea .stat-card {
+        background-color: #fff;
+        border-radius: .25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.24);
+        padding: 15px;
+        margin-bottom: 15px;
+        height: 100%; /* For align-items-stretch on the row */
+        display: flex; /* Make stat-card a flex container */
+        flex-direction: column; /* Stack title and content vertically */
+      }
+      #historicalDashboardArea .stat-card .stat-title {
+        font-size: 0.9rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+        text-align: center;
+        flex-shrink: 0; /* Prevent title from shrinking */
+      }
+      #historicalDashboardArea .stat-card .stat-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #343a40;
+        text-align: center;
+        margin-top: auto; /* Push to center/bottom if content above is short */
+        margin-bottom: auto; /* Push to center/top if content below is short */
+        flex-shrink: 0;
+      }
+      #historicalDashboardArea .stat-card .list-group {
+         margin-top: 5px;
+         width: 100%; /* Ensure list group takes full width */
+         flex-grow: 1; /* Allow list group to take available space */
+      }
+      #historicalDashboardArea .list-group-item { /* This is for items in dashboard lists */
+        font-size: 0.95rem;
+        background-color: transparent;
+        border-left: none;
+        border-right: none;
+        border-top: 1px solid rgba(0,0,0,.075);
+        padding-left: 0; /* Remove default list-group-item padding if card has padding */
+        padding-right: 0;
+        /* d-flex justify-content-between align-items-center are set by JS */
+      }
+      #historicalDashboardArea .list-group-item:first-child {
+        border-top: none;
+      }
+      /* NEW CSS to help with alignment inside list items */
+      #historicalDashboardArea .list-group-item > span:first-child {
+        margin-right: auto; /* Push the text to the left */
+        text-align: left;
+        /* text-truncate can be added here if needed */
+        /* white-space: nowrap; overflow: hidden; text-overflow: ellipsis; */
+      }
+       #historicalDashboardArea .list-group-item > .badge {
+        margin-left: 10px; /* Ensure some space before the badge */
+        flex-shrink: 0; /* Prevent badge from shrinking */
+      }
+
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="mb-4 text-center">Fabletics - Historical Order Viewer</h1>
+
+      <div id="loadingIndicatorHist">
+        <div class="spinner-border text-primary" role="status"><span class="sr-only">Loading...</span></div>
+        <p class="mt-2 mb-0">Loading historical data...</p>
+      </div>
+
+      <div id="messageAreaHist" style="position: fixed; top: 10px; right: 10px; z-index: 1055; min-width: 250px;"></div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="form-row align-items-end">
+            <div class="col-lg-4 col-md-5 mb-2 mb-md-0">
+              <label for="historicalCollectionSelect" class="mb-0">Select Archived Collection:</label>
+              <select id="historicalCollectionSelect" class="form-control form-control-sm">
+                <option value="" disabled selected>-- Select Collection --</option>
+              </select>
+            </div>
+            <div class="col-lg-8 col-md-7 action-buttons text-md-left text-center mt-2 mt-md-0">
+              <button id="viewHistoricalOrdersBtn" class="btn btn-sm btn-info active" disabled><i class="fas fa-list-alt"></i> View Orders</button>
+              <button id="viewHistoricalInventoryBtn" class="btn btn-sm btn-secondary" disabled><i class="fas fa-boxes"></i> View Inventory</button>
+              <button id="viewHistoricalDashboardBtn" class="btn btn-sm btn-secondary" disabled><i class="fas fa-chart-pie"></i> View Dashboard</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="historicalOrdersArea" style="display: none;">
+        <h4 id="historicalOrdersTitle" class="mb-3">Orders for Archived Collection: <span></span></h4>
+        <div id="paginationControlsTopHist" class="d-flex justify-content-center my-2"></div>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover table-sm">
+            <thead class="thead-dark">
+              <tr><th>ID</th><th>Contact</th><th>Email</th><th>Owner</th><th>Status</th><th>Date Ordered</th><th>OMS ID</th></tr>
+            </thead>
+            <tbody id="historicalOrdersTableBody"></tbody>
+          </table>
+        </div>
+        <div id="paginationControlsBottomHist" class="d-flex justify-content-center my-2"></div>
+      </div>
+
+      <div id="historicalInventoryArea" class="mt-4" style="display: none;">
+        <h4 id="historicalInventoryTitle" class="mb-3">Inventory for Archived Collection: <span></span></h4>
+        <div id="historicalInventoryContent" class="row">
+          </div>
+      </div>
+
+      <div id="historicalDashboardArea" class="mt-4" style="display: none;">
+        <h4 id="historicalDashboardTitle" class="mb-3">Dashboard for Archived Collection: <span></span></h4>
+        <div class="row d-flex align-items-stretch">
+          <div class="col-md-4 mb-3 d-flex">
+            <div class="stat-card w-100">
+              <div class="stat-title">Total Orders</div>
+              <div id="histStatTotalOrders" class="stat-value">--</div>
+            </div>
+          </div>
+          <div class="col-md-8 mb-3 d-flex">
+            <div class="stat-card w-100">
+              <div class="stat-title">Order Status Breakdown</div>
+              <div id="histStatOrderStatus">
+                <p class="text-center text-muted">--</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row d-flex align-items-stretch">
+          <div class="col-md-12 d-flex">
+            <div class="stat-card w-100">
+              <div class="stat-title">Top Outfits Ordered (Archived)</div>
+              <div id="histStatTopOutfits">
+                <p class="text-center text-muted">--</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <?!= include('JavaScript_Historical'); ?>
+  </body>
+</html>

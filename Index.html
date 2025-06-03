@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fabletics Influencer Ordering System</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.13.18/css/bootstrap-select.min.css">
+    <?!= include('Stylesheet'); ?>
+    <style>
+      /* Custom style for the new purple button */
+      .btn-purple {
+        color: #fff;
+        background-color: #6f42c1; /* Bootstrap purple */
+        border-color: #6f42c1;
+      }
+      .btn-purple:hover {
+        color: #fff;
+        background-color: #5a349e;
+        border-color: #533091;
+      }
+      /* Custom style for the new orange button */
+      .btn-orange {
+        color: #fff;
+        background-color: #fd7e14; /* Bootstrap orange */
+        border-color: #fd7e14;
+      }
+      .btn-orange:hover {
+        color: #fff;
+        background-color: #e66f00;
+        border-color: #d96800;
+      }
+      /* Style for the filter results message */
+      .filter-results-text {
+        font-size: 0.95rem; /* Bigger than 'small' */
+        color: #000000;     /* Black color */
+      }
+      /* For centering modal title */
+      .modal-header .modal-title {
+        margin-left: auto; 
+        margin-right: auto; 
+        text-align: center;
+        flex-grow: 1; 
+      }
+       .modal-header .close {
+        position: absolute; 
+        right: 1rem;
+        top: 1rem;
+        padding: 1rem;
+        margin: -1rem -1rem -1rem auto; 
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container-fluid mt-3">
+      <h1 class="mb-4 text-center">Fabletics Influencer Ordering System</h1>
+
+      <div id="loadingIndicator" style="display: none; text-align: center; padding: 20px; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1060; background: rgba(255,255,255,0.8); border-radius: 10px;">
+        <div class="spinner-border text-primary" role="status">
+          <span class="sr-only">Loading...</span>
+        </div>
+        <p class="mt-2 mb-0">Loading data...</p>
+      </div>
+
+      <div id="messageArea" style="position: fixed; top: 10px; right: 10px; z-index: 1055; min-width: 250px;"></div>
+
+      <div id="mainDashboardStatsArea" class="mb-4 p-3 border rounded bg-light">
+          <h4 class="text-center">Key Metrics</h4>
+          <div id="mainDashboardContent" class="row">
+              <p class="text-center text-muted w-100">Loading key metrics...</p>
+          </div>
+      </div>
+
+      <div id="filtersCard" class="card mb-3">
+           <div class="card-body">
+                <div class="row mb-3 align-items-end">
+                     <div class="col-md-3">
+                         <label for="collectionSelect">Select Collection (Orders/Metrics):</label>
+                         <select id="collectionSelect" class="form-control form-control-sm">
+                            <option value="" disabled selected>-- Select Collection --</option>
+                         </select>
+                     </div>
+                     <div class="col-md-2">
+                         <label for="filterOwnerSelect">Filter by Owner:</label>
+                         <select id="filterOwnerSelect" class="form-control form-control-sm">
+                             <option value="">-- All Owners --</option>
+                             </select>
+                     </div>
+                     <div class="col-md-2">
+                         <label for="filterName">Search by Name:</label>
+                         <input type="text" id="filterName" class="form-control form-control-sm" placeholder="Enter name...">
+                     </div>
+                     <div class="col-md-2">
+                         <label for="filterEmail">Search by Email:</label>
+                         <input type="email" id="filterEmail" class="form-control form-control-sm" placeholder="Enter email...">
+                     </div>
+                     <div class="col-md-3"> <label for="filterStatus">Filter by Status:</label>
+                         <select id="filterStatus" class="form-control form-control-sm">
+                            <option value="">-- All Statuses --</option>
+                            </select>
+                     </div>
+                </div>
+                <div class="row mb-3 justify-content-center align-items-end">
+                    <div class="col-md-auto">
+                        <label for="filterStartDate">Start Date Ordered:</label>
+                        <input type="date" id="filterStartDate" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-auto">
+                        <label for="filterEndDate">End Date Ordered:</label>
+                        <input type="date" id="filterEndDate" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-auto">
+                        <button id="applyFiltersBtn" class="btn btn-sm btn-primary" title="Apply Filters"><i class="fas fa-filter"></i> Filter</button>
+                    </div>
+                    <div class="col-auto">
+                        <button id="clearFiltersBtn" class="btn btn-sm btn-secondary" title="Clear Filters"><i class="fas fa-times"></i> Clear</button>
+                    </div>
+                    <div class="col-auto align-self-center">
+                        <span id="filterResultsMessage" class="ml-2 filter-results-text"></span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label>Filter by Stock Availability (Pending Orders):</label>
+                        <div class="btn-group btn-group-toggle d-block" data-toggle="buttons" id="stockFilterButtonGroup">
+                            <label class="btn btn-sm btn-outline-secondary active">
+                                <input type="radio" name="stockFilter" id="stockFilterAll" value="all" checked autocomplete="off"> Show All Orders
+                            </label>
+                            <label class="btn btn-sm btn-outline-success">
+                                <input type="radio" name="stockFilter" id="stockFilterInStock" value="inStock" autocomplete="off"> Show In-Stock Orders
+                            </label>
+                            <label class="btn btn-sm btn-outline-warning">
+                                <input type="radio" name="stockFilter" id="stockFilterPartial" value="partialOOS" autocomplete="off"> Show Partial-In-Stock Orders
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <button id="filterMissingLastNameBtn" class="btn btn-sm btn-orange"><i class="fas fa-user-check"></i> Filter by Missing Last Name</button>
+                    </div>
+                </div>
+                <div class="row">
+                     <div class="col-md-12 text-right">
+                        <button id="manageCollectionsBtn" class="btn btn-sm btn-outline-secondary mr-2" style="display: none;"><i class="fas fa-layer-group"></i> Manage Collections</button>
+                        <button id="viewInventoryBtn" class="btn btn-sm btn-info mr-2"><i class="fas fa-boxes"></i> View/Edit Inventory</button>
+                        <button id="manageProductsBtn" class="btn btn-sm btn-outline-secondary mr-2" style="display: none;"><i class="fas fa-tags"></i> Manage Products</button>
+                        <button id="downloadCsvBtn" class="btn btn-sm btn-secondary mr-2"><i class="fas fa-download"></i> Download Orders (CSV)</button>
+                        <button id="downloadImportCsvBtn" class="btn btn-sm btn-purple mr-2" style="display: none;"><i class="fas fa-file-import"></i> Download for Import</button>
+                        <button id="uploadRawDataBtn" class="btn btn-sm btn-success mr-2" style="display: none;"><i class="fas fa-upload"></i> Upload Raw Data</button>
+                        <button id="processRawBtn" class="btn btn-sm btn-warning"><i class="fas fa-cogs"></i> Process Raw Export</button>
+                    </div>
+                </div>
+            </div>
+       </div>
+
+      <div id="initialMessage" class="alert alert-info text-center">
+          Please select a collection above to view orders or manage inventory.
+      </div>
+
+      <div id="ordersArea" style="display: none;">
+        <h4 id="ordersListTitle" class="text-center">Orders for Collection: <span></span></h4>
+        <div id="paginationControlsTop" class="d-flex justify-content-center my-2"></div>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover table-sm">
+            <thead class="thead-dark">
+              <tr>
+                </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+                </tbody>
+          </table>
+        </div>
+         <div id="paginationControlsBottom" class="d-flex justify-content-center my-2"></div>
+      </div>
+
+      <div id="inventoryArea" class="mt-4" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                 <h4 id="inventoryListTitle" class="text-center">Inventory for Collection: <span></span></h4>
+                 <div>
+                     <button id="addNewOutfitBtn" class="btn btn-success mr-2" style="display: none;"><i class="fas fa-plus"></i> Add New Outfit</button>
+                     <button id="backToOrdersBtn" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Orders</button>
+                 </div>
+             </div>
+             <div id="inventoryContent" class="row">
+                 </div>
+      </div>
+
+      <input type="file" id="rawFileUploadInput" accept=".csv,.tsv,.txt" style="display: none;">
+
+      <datalist id="productCategoriesDataList"></datalist>
+    </div>
+
+    <div class="modal fade" id="orderDetailsModal" tabindex="-1" role="dialog" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-xl" role="document">
+          <div class="modal-content">
+              <div class="modal-header"> 
+                <h5 class="modal-title w-100 text-center" id="orderDetailsModalLabel">Order Details - <span id="modalContactName"></span></h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+              </div>
+              <div class="modal-body">
+                 <div id="modalDuplicateWarning" class="alert alert-danger" role="alert" style="display: none;">
+                   <h6 class="alert-heading"><i class="fas fa-exclamation-triangle mr-2"></i>Duplicate Email Detected!</h6>
+                   <p>This email address has multiple order requests in this collection.</p>
+                   <hr><p class="mb-0">Other Order IDs: <span id="modalOtherOrderIds"></span></p>
+                 </div>
+                 <form id="orderDetailsForm">
+                  <input type="hidden" id="modalOrderID" name="OrderID">
+                  <input type="hidden" id="modalCollectionName" name="CollectionName">
+                  
+                  <h5 class="text-center mb-3"><strong>Contact & Address</strong></h5>
+                  <div class="row">
+                      <div class="col-md-6">
+                          <div class="form-row">
+                              <div class="form-group col-md-6">
+                                  <label for="modalFirstName">First Name</label>
+                                  <input type="text" class="form-control form-control-sm" id="modalFirstName" name="FirstName">
+                              </div>
+                              <div class="form-group col-md-6">
+                                  <label for="modalLastName">Last Name</label>
+                                  <input type="text" class="form-control form-control-sm" id="modalLastName" name="LastName">
+                              </div>
+                          </div>
+                          <div id="contactNameWarning" class="mb-2"></div>
+                          <div class="form-group">
+                              <label for="modalStreetAddress">Street Address</label>
+                              <input type="text" class="form-control form-control-sm" id="modalStreetAddress" name="StreetAddress">
+                          </div>
+                          <div class="form-row">
+                                <div class="form-group col-md-7">
+                                    <label for="modalCity">City</label>
+                                    <input type="text" class="form-control form-control-sm" id="modalCity" name="City">
+                                </div>
+                                <div class="form-group col-md-2">
+                                    <label for="modalStateAbbreviated">State</label>
+                                    <input type="text" class="form-control form-control-sm" id="modalStateAbbreviated" name="StateAbbreviated" maxlength="2">
+                                </div>
+                                <div class="form-group col-md-3">
+                                    <label for="modalZipFormatted">Zip</label>
+                                    <input type="text" class="form-control form-control-sm" id="modalZipFormatted" name="ZipFormatted">
+                                </div>
+                           </div>
+                      </div>
+                       <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="modalEmail">Email Address</label>
+                                <input type="email" class="form-control form-control-sm" id="modalEmail" name="Email">
+                            </div>
+                            <div class="form-group">
+                                <label for="modalOwner">Owner</label>
+                                <input type="text" class="form-control form-control-sm" id="modalOwner" name="Owner">
+                            </div>
+                        </div>
+                   </div>
+                   <hr>
+
+                   <div id="modalOrderHighlights" class="my-3 text-center">
+                   </div>
+                   
+                   <h5 class="text-center mt-3 mb-3"><strong>Preferences & Stock</strong></h5>
+                   <div id="modalPreferencesList">
+                   </div>
+                   <hr>
+
+                   <h5 class="text-center mt-4 mb-3"><strong>Order Placement & Status</strong></h5>
+                   <div class="row">
+                         <div class="col-md-6">
+                             <div class="form-group">
+                                  <label for="modalPromoCodeUsed">Promo Code Used</label>
+                                  <input type="text" class="form-control form-control-sm" id="modalPromoCodeUsed" name="PromoCodeUsedDisplay" readonly>
+                             </div>
+                             <div class="form-group">
+                                 <label for="modalOutfitOrdered"><strong>Which outfit was ordered?</strong></label>
+                                 <select class="form-control form-control-sm" id="modalOutfitOrdered" name="OutfitOrdered">
+                                     <option value="">-- Select --</option>
+                                     <option value="N/A">N/A</option>
+                                     <option value="ALL">ALL</option>
+                                 </select>
+                             </div>
+                             <div class="form-group">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="modalTwoOutfitsCheckbox">
+                                    <label class="form-check-label" for="modalTwoOutfitsCheckbox">
+                                        2 outfits?
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group" id="modalOutfitOrdered2Container" style="display: none;">
+                                <label for="modalOutfitOrdered2"><strong>Second outfit ordered?</strong></label>
+                                <select class="form-control form-control-sm" id="modalOutfitOrdered2" name="OutfitOrdered2">
+                                    <option value="">-- Select --</option>
+                                    <option value="N/A">N/A</option>
+                                    <option value="ALL">ALL</option>
+                                </select>
+                            </div>
+                             <div class="form-group">
+                                 <label for="modalSwap">Swap</label>
+                                 <select class="form-control form-control-sm" id="modalSwap" name="Swap">
+                                     <option value="">-- Select Swap Status --</option>
+                                 </select>
+                             </div>
+                             <div class="form-group">
+                                  <label>Date Ordered</label> 
+                                  <p id="modalDateOrderedDisplay" class="form-control-static"></p> 
+                                  <input type="hidden" id="modalDateOrdered" name="DateOrdered">
+                             </div>
+                         </div>
+                         <div class="col-md-6">
+                              <div class="form-group">
+                                 <label for="modalOMS_ID"><strong>Bond/OMS ID#</strong></label>
+                                 <input type="text" class="form-control form-control-sm" id="modalOMS_ID" name="OMS_ID">
+                                 <small class="form-text text-muted">Entering ID automatically sets status to 'Fulfilled' (if applicable).</small>
+                             </div>
+                             <div class="form-group">
+                                  <label for="modalFulfillmentStatus">Fulfillment Status</label>
+                                  <select class="form-control form-control-sm" id="modalFulfillmentStatus" name="FulfillmentStatus">
+                                  </select>
+                             </div>
+                             <div class="form-group">
+                                  <label for="modalOrderIssue">Order Issue</label>
+                                  <select class="form-control form-control-sm" id="modalOrderIssue" name="OrderIssue">
+                                      <option value="">-- None --</option>
+                                  </select>
+                             </div>
+                             <div class="form-group">
+                                  <label for="modalOMS_Cost">OMS Cost (If applicable)</label>
+                                  <input type="number" step="0.01" class="form-control form-control-sm" id="modalOMS_Cost" name="OMS_Cost" placeholder="e.g., 123.45">
+                             </div>
+                         </div>
+                   </div>
+                   <hr>
+
+                   <h5 class="text-center mt-4 mb-3"><strong>Notes</strong></h5>
+                   <div class="form-group"> 
+                       <label for="modalINSEAM">INSEAM</label>
+                       <input type="text" class="form-control form-control-sm" id="modalINSEAM" name="INSEAM">
+                   </div>
+                   <div class="form-group">
+                       <label for="modalNumOutfits"># of Outfits (If applicable)</label>
+                       <textarea class="form-control form-control-sm" id="modalNumOutfits" name="OutfitsRawOriginal" rows="2"></textarea>
+                   </div>
+                   <div class="form-group">
+                       <label for="modalGeneralNotes">General Notes</label>
+                       <textarea class="form-control form-control-sm" id="modalGeneralNotes" name="GeneralNotes" rows="3"></textarea>
+                   </div>
+                   <div class="form-group">
+                       <label for="modalOutfitUnavailableNotes">Outfit Unavailable Notes</label>
+                       <textarea class="form-control form-control-sm" id="modalOutfitUnavailableNotes" name="OutfitUnavailableNotes" rows="2"></textarea>
+                   </div>
+                </form>
+              </div>
+              <div class="modal-footer">
+                 <span id="modalSpinner" class="spinner-border spinner-border-sm text-primary mr-2" role="status" style="display: none;"></span>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveOrderDetailsBtn">Save Changes</button>
+              </div>
+          </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="inventoryUpdateModal" tabindex="-1" role="dialog" aria-labelledby="inventoryUpdateModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="inventoryUpdateModalLabel">Update Inventory: <span id="inventoryUpdateOutfitName"></span></h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+          </div>
+          <div class="modal-body">
+              <form id="inventoryUpdateForm">
+                   <input type="hidden" id="inventoryUpdateCollectionName" name="collectionName">
+                   <input type="hidden" id="inventoryUpdateOutfitNameHidden" name="outfitName">
+                   <div class="form-row">
+                      <div class="form-group col-md-8">
+                         <label for="updateOutfitImage">Update Outfit Image (Optional)</label>
+                         <input type="file" class="form-control-file" id="updateOutfitImage" accept="image/png, image/jpeg, image/gif, image/webp">
+                         <small class="form-text text-muted">Upload new image to replace existing one for all pieces of this outfit.</small>
+                      </div>
+                      <div class="form-group col-md-4 d-flex align-items-center">
+                         <div class="form-check">
+                             <input class="form-check-input" type="checkbox" id="updateOutfitIsActive">
+                             <label class="form-check-label" for="updateOutfitIsActive">
+                               Is Outfit Active?
+                             </label>
+                             <small class="form-text text-muted">Uncheck to mark the entire outfit as inactive.</small>
+                         </div>
+                     </div>
+                   </div>
+                   <hr>
+                   <h6>Piece Details</h6>
+                   <div id="inventoryUpdatePiecesContainer"><p class="text-center">Loading piece details...</p></div>
+                   <hr> <h6>Outfit Quick Note</h6> <div class="form-group"> <label for="updateOutfitQuickNote" class="sr-only">Outfit Quick Note</label>
+                       <textarea class="form-control form-control-sm" id="updateOutfitQuickNote" name="outfitQuickNote" rows="2" placeholder="Add a short, prominent note for this outfit..."></textarea>
+                       <small class="form-text text-muted">This note will be displayed in large red text on the inventory card.</small>
+                   </div>
+              </form>
+          </div>
+           <div class="modal-footer">
+               <span id="inventoryUpdateSpinner" class="spinner-border spinner-border-sm text-primary mr-2" role="status" style="display: none;"></span>
+               <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+               <button type="button" class="btn btn-primary" id="saveInventoryUpdateBtn">Save Inventory Changes</button>
+           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="manageProductsModal" tabindex="-1" role="dialog" aria-labelledby="manageProductsModalLabel" aria-hidden="true">
+       <div class="modal-dialog modal-lg" role="document">
+         <div class="modal-content">
+           <div class="modal-header">
+             <h5 class="modal-title" id="manageProductsModalLabel">Manage Products & Categories</h5>
+             <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+           </div>
+           <div class="modal-body">
+             <h6 id="productFormTitle">Add New Product</h6>
+             <form id="addProductForm" class="form-inline mb-3 p-3 bg-light rounded border" novalidate>
+                 <input type="hidden" id="editProductOriginalName">
+                 <div class="form-group mr-2 flex-grow-1">
+                   <label for="newProductName" class="sr-only">Product Name</label>
+                   <input type="text" class="form-control form-control-sm w-100" id="newProductName" placeholder="Product Name*" required>
+                   <div class="invalid-feedback">Required.</div>
+                 </div>
+                 <div class="form-group mr-2">
+                   <label for="newProductCategory" class="sr-only">Category</label>
+                   <input type="text" class="form-control form-control-sm" id="newProductCategory" placeholder="Category*" required list="productCategoriesList">
+                   <datalist id="productCategoriesList"></datalist>
+                   <div class="invalid-feedback">Required.</div>
+                 </div>
+                 <button type="submit" class="btn btn-sm btn-success" id="saveProductBtn"><i class="fas fa-plus"></i> Add Product</button>
+                 <button type="button" class="btn btn-sm btn-secondary ml-2" id="cancelEditProductBtn" style="display: none;">Cancel Edit</button>
+                 <span id="addProductSpinner" class="spinner-border spinner-border-sm text-primary ml-2" role="status" style="display: none;"></span>
+             </form><hr>
+             <h6>Existing Products</h6>
+             <div id="existingProductsList" style="max-height: 300px; overflow-y: auto;"></div>
+           </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+         </div>
+       </div>
+     </div>
+
+     <div class="modal fade" id="manageCollectionsModal" tabindex="-1" role="dialog" aria-labelledby="manageCollectionsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="manageCollectionsModalLabel">Manage Collections</h5>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body">
+              <form id="addEditCollectionForm" class="mb-4 p-3 bg-light rounded border" novalidate>
+                <input type="hidden" id="editCollectionOriginalName">
+                <h6 id="collectionFormTitle">Add New Collection</h6>
+                <div class="form-row">
+                  <div class="form-group col-md-5">
+                    <label for="collectionNameInput">Collection Name*</label>
+                    <input type="text" class="form-control form-control-sm" id="collectionNameInput" required>
+                    <div class="invalid-feedback">Name required.</div>
+                  </div>
+                  <div class="form-group col-md-4">
+                    <label for="collectionPromoCodeInput">Promo Code</label>
+                    <input type="text" class="form-control form-control-sm" id="collectionPromoCodeInput">
+                  </div>
+                  <div class="form-group col-md-3 d-flex align-items-end">
+                     <div class="form-check"><input class="form-check-input" type="checkbox" id="collectionIsActiveInput"><label class="form-check-label" for="collectionIsActiveInput">Is Active?</label></div>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-sm btn-success" id="saveCollectionBtn"><i class="fas fa-save"></i> Save Collection</button>
+                <button type="button" class="btn btn-sm btn-secondary ml-2" id="cancelEditCollectionBtn" style="display: none;">Cancel Edit</button>
+                <span id="saveCollectionSpinner" class="spinner-border spinner-border-sm text-primary ml-2" role="status" style="display: none;"></span>
+              </form><hr>
+              <h6>Existing Collections</h6>
+              <div id="existingCollectionsList" style="max-height: 350px; overflow-y: auto;"></div>
+            </div>
+             <div class="modal-footer">
+                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal fade" id="addOutfitModal" tabindex="-1" role="dialog" aria-labelledby="addOutfitModalLabel" aria-hidden="true">
+       <div class="modal-dialog modal-xl" role="document">
+         <div class="modal-content">
+           <div class="modal-header">
+             <h5 class="modal-title" id="addOutfitModalLabel">Add New Outfit to Collection: <span id="addOutfitCollectionName"></span></h5>
+             <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+           </div>
+           <div class="modal-body">
+               <form id="addOutfitForm" novalidate>
+                    <input type="hidden" id="addOutfitCollectionHidden" name="collectionName">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                           <label for="newOutfitName">Outfit Name*</label>
+                           <input type="text" class="form-control form-control-sm" id="newOutfitName" name="outfitName" required>
+                           <div class="invalid-feedback">Required.</div>
+                        </div>
+                        <div class="form-group col-md-6">
+                           <label for="newOutfitImage">Outfit Image (Optional)</label>
+                           <input type="file" class="form-control-file" id="newOutfitImage" name="outfitImage" accept="image/png, image/jpeg, image/gif, image/webp">
+                        </div>
+                    </div><hr>
+                    <h6>Outfit Pieces</h6>
+                    <div id="newOutfitPiecesContainer">
+                        </div>
+                    <button type="button" class="btn btn-sm btn-outline-success mt-2" id="addPieceBtn"><i class="fas fa-plus"></i> Add Piece</button>
+                    <small id="piecesHelp" class="form-text text-muted">Add at least one piece. Product Name & SKU required per piece.</small>
+               </form>
+           </div>
+            <div class="modal-footer">
+                <span id="addOutfitSpinner" class="spinner-border spinner-border-sm text-primary mr-2" role="status" style="display: none;"></span>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveNewOutfitBtn">Save New Outfit</button>
+            </div>
+         </div>
+       </div>
+     </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-LtrjvnR4Twt/qOuYxE721u19sVFLVSA4hf/rRt6PrZTmiPltdZcI7q7PXQBYTKyf" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.13.18/js/bootstrap-select.min.js"></script>
+    <?!= include('JavaScript'); ?>
+  </body>
+</html>

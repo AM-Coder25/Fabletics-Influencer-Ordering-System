@@ -1,0 +1,338 @@
+<script>
+    // --- Utility Functions for Admin Page ---
+    function showAdminLoading(message = 'Loading...') { $('#adminLoadingIndicator p').text(message); $('#adminLoadingIndicator').fadeIn(100); }
+    function hideAdminLoading() { $('#adminLoadingIndicator').fadeOut(100); }
+    function displayAdminMessage(message, type = 'success', duration = 5000) {
+        const alertId = `admin-alert-${Date.now()}`;
+        const alertClass = type === 'danger' ? 'alert-danger' : (type === 'warning' ? 'alert-warning' : (type === 'info' ? 'alert-info' : 'alert-success'));
+        const icon = type === 'danger' ? 'fa-exclamation-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : (type === 'info' ? 'fa-info-circle' : 'fa-check-circle'));
+        // Ensure adminMessageArea exists
+        if ($('#adminMessageArea').length === 0) {
+            $('body').prepend('<div id="adminMessageArea" style="position: fixed; top: 15px; right: 15px; z-index: 1065; min-width: 300px;"></div>');
+        }
+        $('#adminMessageArea').append(`<div id="${alertId}" class="alert ${alertClass} alert-dismissible fade show shadow-sm" role="alert" style="min-width:300px;"><i class="fas ${icon} mr-2"></i>${escapeHtml(message)}<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>`);
+        if (duration > 0) setTimeout(() => { $(`#${alertId}`).alert('close'); }, duration);
+    }
+    function escapeHtml(unsafe) { return unsafe === null || typeof unsafe === 'undefined' ? '' : unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");}
+
+    // --- Initialization ---
+    $(document).ready(function() {
+        loadAdminData();
+        setupAdminEventListeners();
+        // Log access to this admin page using the new logActivity function
+        google.script.run.withFailureHandler(onAdminFailure).logActivity("VIEW_ACCESS", "Loaded Admin Config Page");
+    });
+
+    function loadAdminData() {
+        showAdminLoading('Fetching admin dashboard data...');
+        google.script.run
+            .withSuccessHandler(onAdminDataLoaded)
+            .withFailureHandler(onAdminFailure)
+            .getAdminDashboardData();
+    }
+
+    function onAdminDataLoaded(data) {
+        hideAdminLoading();
+        if (data.error) {
+            const mainAppUrl = $('a:contains(Back to Main App)').attr('href') || '#';
+            if (data.error === "Unauthorized") {
+                 $('body').html(`<div class="container mt-5 text-center"><div class="alert alert-danger p-4"><h3><i class="fas fa-lock mr-2"></i>Access Denied</h3><p class="lead">You are not authorized to view this page.</p><hr><p><a href="${mainAppUrl}" class="btn btn-primary btn-lg"><i class="fas fa-home"></i> Go to Main Application</a></p></div></div>`);
+            } else {
+                displayAdminMessage(`Error loading admin data: ${escapeHtml(data.error)}. Check server logs.`, 'danger', 0);
+                 $('#activeUsers15MinTableContainer').html('<p class="text-danger small">Error loading active users (15 min).</p>');
+                 $('#todaysActiveUsersTableContainer').html('<p class="text-danger small">Error loading today\'s active users.</p>');
+                 $('#recentErrorsTableContainer').html('<p class="text-danger small">Error loading recent errors.</p>');
+                 $('#configOptionsTableContainer').html('<p class="text-danger small">Error loading config options.</p>');
+                 $('#detailedActivityLogTableContainer').html('<p class="text-danger small">Error loading detailed activity log.</p>');
+            }
+            return;
+        }
+        $('#currentUserDisplay').text(`User: ${escapeHtml(data.currentUserEmail || 'N/A')}`);
+        populateActiveUsers15MinTable(data.activeUsers15Min); 
+        populateTodaysActiveUsersTable(data.todaysActiveUsers); 
+        populateRecentErrorsTable(data.recentErrors);
+        populateConfigOptionsTable(data.configOptions);
+        populateDetailedActivityLogTable(data.detailedActivityLog); 
+    }
+
+    // --- Populate Table Functions ---
+    function populateActiveUsers15MinTable(users) { 
+        const container = $('#activeUsers15MinTableContainer'); container.empty();
+        if (!users || users.length === 0) { container.append('<p class="text-muted small font-italic">No users detected as active in the last 15 minutes.</p>'); return; }
+        let table = '<table id="activeUsers15MinTable" class="table table-sm table-borderless table-striped small"><thead><tr><th>Email</th><th>Last Seen</th><th>View</th></tr></thead><tbody>'; // Changed ID
+        users.forEach(u => {
+            table += `<tr><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.lastAccess)}</td><td><span class="badge badge-info">${escapeHtml(u.view)}</span></td></tr>`;
+        });
+        table += '</tbody></table>'; container.html(table);
+    }
+
+    function populateTodaysActiveUsersTable(users) { 
+        const container = $('#todaysActiveUsersTableContainer'); container.empty();
+        if (!users || users.length === 0) { container.append('<p class="text-muted small font-italic">No users active today yet.</p>'); return; }
+        let table = '<table id="todaysActiveUsersTable" class="table table-sm table-borderless table-striped small"><thead><tr><th>Email</th><th>First Seen Today</th><th>Activity Types</th></tr></thead><tbody>';
+        users.forEach(u => {
+            table += `<tr><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.firstSeen)}</td><td><small>${escapeHtml(u.activityTypes)}</small></td></tr>`;
+        });
+        table += '</tbody></table>'; container.html(table);
+    }
+    
+    function populateRecentErrorsTable(errors) {
+        const container = $('#recentErrorsTableContainer'); container.empty();
+        if (!errors || errors.length === 0) { container.append('<p class="text-muted small font-italic">No recent errors logged. Good job!</p>'); return; }
+        let table = '<table id="recentErrorsTable" class="table table-sm table-borderless table-striped small"><thead><tr><th>Time</th><th>User</th><th>Function</th><th>Error</th><th>Details</th></tr></thead><tbody>';
+        errors.forEach(e => {
+            table += `<tr>
+                        <td>${escapeHtml(e.timestamp)}</td>
+                        <td>${escapeHtml(e.user)}</td>
+                        <td>${escapeHtml(e.functionName)}</td>
+                        <td style="max-width: 120px; overflow-wrap: break-word;">${escapeHtml(e.errorMessage)}</td>
+                        <td style="max-width: 150px; overflow-wrap: break-word;">${escapeHtml(e.details)}</td>
+                      </tr>`;
+        });
+        table += '</tbody></table>'; container.html(table);
+    }
+
+    function populateConfigOptionsTable(options) {
+        const container = $('#configOptionsTableContainer'); container.empty();
+         if (options.error) {
+            container.html(`<p class="text-danger small">Error loading config options: ${escapeHtml(options.error)}</p>`);
+            return;
+        }
+        if (!options || options.length === 0) { container.append('<p class="text-muted small font-italic">No configuration options found in the Config sheet.</p>'); return; }
+
+        let table = '<table id="configOptionsTable" class="table table-bordered table-striped table-hover table-sm"><thead><tr><th>Type</th><th>Value</th><th>Style Info</th><th>Display Order</th><th>Description</th><th style="width: 80px;">Actions</th></tr></thead><tbody>';
+        options.sort((a,b) => { 
+            if (a.settingType.toLowerCase() < b.settingType.toLowerCase()) return -1;
+            if (a.settingType.toLowerCase() > b.settingType.toLowerCase()) return 1;
+            const orderA = parseInt(a.displayOrder,10) || 9999;
+            const orderB = parseInt(b.displayOrder,10) || 9999;
+            if (orderA < orderB) return -1;
+            if (orderA > orderB) return 1;
+            if (a.optionValue.toLowerCase() < b.optionValue.toLowerCase()) return -1;
+            if (a.optionValue.toLowerCase() > b.optionValue.toLowerCase()) return 1;
+            return 0;
+        });
+        options.forEach(opt => {
+            table += `<tr data-row-index="${opt.rowIndex}">
+                        <td>${escapeHtml(opt.settingType)}</td>
+                        <td>${escapeHtml(opt.optionValue)}</td>
+                        <td>${escapeHtml(opt.styleInfo)}</td>
+                        <td>${escapeHtml(opt.displayOrder)}</td>
+                        <td>${escapeHtml(opt.description)}</td>
+                        <td class="text-center action-buttons">
+                            <button class="btn btn-xs btn-outline-primary edit-config-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn btn-xs btn-outline-danger delete-config-btn ml-1" title="Delete"><i class="fas fa-trash"></i></button>
+                        </td>
+                      </tr>`;
+        });
+        table += '</tbody></table>'; container.html(table);
+    }
+
+    function populateDetailedActivityLogTable(logEntries) { 
+        const container = $('#detailedActivityLogTableContainer'); container.empty();
+        if (!logEntries || logEntries.length === 0) { container.append('<p class="text-muted small font-italic">No detailed activity logged recently.</p>'); return; }
+        let table = '<table id="detailedActivityLogTable" class="table table-sm table-borderless table-striped small"><thead><tr><th>Timestamp</th><th>User</th><th>Type</th><th>Description</th><th>Details</th></tr></thead><tbody>';
+        logEntries.forEach(entry => {
+            let detailsDisplay = escapeHtml(entry.details);
+            if (entry.details && entry.details.startsWith('{')) { 
+                try {
+                    const obj = JSON.parse(entry.details);
+                    detailsDisplay = `<pre class="mb-0 small" style="white-space: pre-wrap; max-height: 100px; overflow-y: auto; background-color: #f8f9fa; padding: 2px 5px; border-radius: 3px;">${escapeHtml(JSON.stringify(obj, null, 2))}</pre>`;
+                } catch (e) { /* fallback to plain text if JSON parse fails */ }
+            }
+            table += `<tr>
+                        <td>${escapeHtml(entry.timestamp)}</td>
+                        <td>${escapeHtml(entry.userEmail)}</td>
+                        <td><span class="badge badge-secondary">${escapeHtml(entry.activityType)}</span></td>
+                        <td>${escapeHtml(entry.description)}</td>
+                        <td>${detailsDisplay}</td>
+                      </tr>`;
+        });
+        table += '</tbody></table>'; container.html(table);
+    }
+
+
+    // --- Event Listeners Setup ---
+    function setupAdminEventListeners() {
+        // Refresh Buttons
+        $('#refreshActiveUsers15MinBtn').on('click', () => { 
+            showAdminLoading('Refreshing active users (15 min)...'); 
+            google.script.run.withSuccessHandler(data => { hideAdminLoading(); populateActiveUsers15MinTable(data.activeUsers15Min);}).withFailureHandler(onAdminFailure).getAdminDashboardData(); 
+        });
+        $('#refreshTodaysActiveUsersBtn').on('click', () => { 
+            showAdminLoading('Refreshing today\'s active users...'); 
+            google.script.run.withSuccessHandler(data => { hideAdminLoading(); populateTodaysActiveUsersTable(data.todaysActiveUsers);}).withFailureHandler(onAdminFailure).getAdminDashboardData();
+        });
+        $('#refreshRecentErrorsBtn').on('click', () => { 
+            showAdminLoading('Refreshing recent errors...'); 
+            google.script.run.withSuccessHandler(data => { hideAdminLoading(); populateRecentErrorsTable(data.recentErrors);}).withFailureHandler(onAdminFailure).getAdminDashboardData(); 
+        });
+        $('#refreshDetailedActivityLogBtn').on('click', () => { 
+            showAdminLoading('Refreshing detailed activity log...');
+            google.script.run.withSuccessHandler(data => { hideAdminLoading(); populateDetailedActivityLogTable(data.detailedActivityLog);}).withFailureHandler(onAdminFailure).getAdminDashboardData();
+        });
+        
+        // Cache Buttons 
+        $('#clearAuthCacheBtn').on('click', function() {
+            if (confirm("Are you sure you want to clear the Authorization Cache? Users might need to re-authorize.")) {
+                showAdminLoading("Clearing Authorization Cache...");
+                $(this).prop('disabled', true); // Disable button during operation
+                google.script.run
+                    .withSuccessHandler(function(msg){ 
+                        hideAdminLoading(); 
+                        displayAdminMessage(msg || "Authorization cache cleared successfully!", "success"); 
+                        $('#clearAuthCacheBtn').prop('disabled', false);
+                    })
+                    .withFailureHandler(function(err) {
+                        onAdminFailure(err);
+                        $('#clearAuthCacheBtn').prop('disabled', false);
+                    })
+                    .clearAuthorizationCache();
+            }
+        });
+        $('#clearSiteCacheBtn').on('click', function() {
+            if (confirm("Are you sure you want to clear ALL known Site Caches? This may temporarily slow down the application.")) {
+                showAdminLoading("Clearing All Site Caches...");
+                $(this).prop('disabled', true); // Disable button during operation
+                google.script.run
+                    .withSuccessHandler(function(msg){ 
+                        hideAdminLoading(); 
+                        displayAdminMessage(msg || "All known site caches cleared successfully!", "success"); 
+                        $('#clearSiteCacheBtn').prop('disabled', false);
+                    })
+                    .withFailureHandler(function(err){
+                        onAdminFailure(err);
+                        $('#clearSiteCacheBtn').prop('disabled', false);
+                    })
+                    .clearAllKnownCaches();
+            }
+        });
+        
+        // Config Option Form
+        $('#showAddConfigOptionFormBtn').on('click', function() { 
+            $('#addEditConfigOptionFormContainer').slideToggle(function() {
+                if ($(this).is(':visible')) {
+                    resetConfigForm(true); 
+                }
+            });
+        });
+        $('#configOptionForm').on('submit', saveConfigOption);
+        $('#cancelConfigEditBtn').on('click', function() { 
+            $('#addEditConfigOptionFormContainer').slideUp(() => resetConfigForm(false));
+        });
+        
+        // Config Table Actions
+        $('#configOptionsTableContainer').on('click', '.edit-config-btn', handleEditConfigOption);
+        $('#configOptionsTableContainer').on('click', '.delete-config-btn', handleDeleteConfigOption);
+    }
+    
+    // --- Config Form Handling --- 
+    function resetConfigForm(isAddingNew = true) { 
+        $('#configFormTitle').text(isAddingNew ? 'Add New Config Option' : 'Edit Config Option');
+        $('#configOptionForm')[0].reset();
+        $('#configRowIndex').val('');
+        $('#configOptionForm').removeClass('was-validated');
+        $('#saveConfigOptionBtn').text(isAddingNew ? 'Add Option' : 'Save Changes').data('action', isAddingNew ? 'add' : 'edit');
+        
+        if (isAddingNew) {
+            $('#cancelConfigEditBtn').hide();
+        } else {
+            $('#cancelConfigEditBtn').show();
+        }
+    }
+
+    function handleEditConfigOption() { 
+        resetConfigForm(false); 
+        $('#configFormTitle').text('Edit Config Option');
+        $('#saveConfigOptionBtn').data('action', 'edit').text('Save Changes');
+        $('#cancelConfigEditBtn').show();
+
+        const row = $(this).closest('tr');
+        $('#configRowIndex').val(row.data('row-index'));
+        $('#configSettingType').val(row.find('td:eq(0)').text());
+        $('#configOptionValue').val(row.find('td:eq(1)').text());
+        $('#configStyleInfo').val(row.find('td:eq(2)').text());
+        $('#configDisplayOrder').val(row.find('td:eq(3)').text());
+        $('#configDescription').val(row.find('td:eq(4)').text());
+        
+        $('#addEditConfigOptionFormContainer').slideDown();
+        $('#configSettingType').focus();
+    }
+
+    function saveConfigOption(e) { 
+        e.preventDefault();
+        const form = $('#configOptionForm')[0];
+        if (!form.checkValidity()) { 
+            form.classList.add('was-validated'); 
+            displayAdminMessage('Please fill all required fields (*).', 'warning');
+            return; 
+        }
+        form.classList.remove('was-validated');
+
+        $('#configFormSpinner').show();
+        $('#saveConfigOptionBtn, #cancelConfigEditBtn').prop('disabled', true);
+
+        const action = $('#saveConfigOptionBtn').data('action');
+        const optionData = {
+            rowIndex: $('#configRowIndex').val(),
+            settingType: $('#configSettingType').val().trim(),
+            optionValue: $('#configOptionValue').val().trim(),
+            styleInfo: $('#configStyleInfo').val().trim(),
+            displayOrder: $('#configDisplayOrder').val().trim(),
+            description: $('#configDescription').val().trim()
+        };
+
+        if (action === 'edit') {
+            if (!optionData.rowIndex) {
+                displayAdminMessage('Error: Row index missing for edit.', 'danger', 0);
+                $('#configFormSpinner').hide();
+                $('#saveConfigOptionBtn, #cancelConfigEditBtn').prop('disabled', false);
+                return;
+            }
+            google.script.run.withSuccessHandler(onConfigSaveSuccess).withFailureHandler(onAdminFailure).updateConfigOption(optionData);
+        } else { 
+            google.script.run.withSuccessHandler(onConfigSaveSuccess).withFailureHandler(onAdminFailure).addConfigOption(optionData);
+        }
+    }
+
+    function handleDeleteConfigOption() { 
+        const row = $(this).closest('tr');
+        const rowIndex = row.data('row-index');
+        const type = row.find('td:eq(0)').text();
+        const value = row.find('td:eq(1)').text();
+
+        if (confirm(`Are you sure you want to delete the config option:\nType: ${escapeHtml(type)}\nValue: ${escapeHtml(value)}?\n\nThis action cannot be undone.`)) {
+            showAdminLoading('Deleting config option...');
+            google.script.run.withSuccessHandler(onConfigSaveSuccess).withFailureHandler(onAdminFailure).deleteConfigOption(rowIndex);
+        }
+    }
+
+    function onConfigSaveSuccess(result) { 
+        hideAdminLoading(); 
+        $('#configFormSpinner').hide();
+        $('#saveConfigOptionBtn, #cancelConfigEditBtn').prop('disabled', false);
+
+        if (result && result.success) {
+            displayAdminMessage(result.message, 'success');
+            $('#addEditConfigOptionFormContainer').slideUp(() => resetConfigForm(true)); 
+            showAdminLoading('Refreshing config options...');
+            google.script.run.withSuccessHandler(data => { 
+                hideAdminLoading(); 
+                populateConfigOptionsTable(data.configOptions ? data.configOptions : data); 
+            }).withFailureHandler(onAdminFailure).getConfigOptionsForAdmin();
+        } else {
+            displayAdminMessage(result.message || "Failed to save config option. Check for duplicates or invalid data.", 'danger', 0);
+        }
+    }
+
+    // --- General Failure Handler ---
+    function onAdminFailure(error) { 
+        hideAdminLoading(); 
+        $('#configFormSpinner').hide();
+        $('#saveConfigOptionBtn, #cancelConfigEditBtn').prop('disabled', false);
+        // Also re-enable cache buttons if an operation failed
+        $('#clearAuthCacheBtn, #clearSiteCacheBtn').prop('disabled', false);
+        console.error('Admin Page Script Error:', error);
+        displayAdminMessage(`Operation Failed: ${error.message || 'An unknown server error occurred.'} Check console for details.`, 'danger', 0);
+    }
+</script>

@@ -1,0 +1,1797 @@
+<script>
+  // --- Global Variables ---
+  let currentCollectionName = null; 
+  let allCollectionsForDashboard = []; 
+  let activeCollections = []; 
+  let allUniqueOwnerNamesGlobal = []; 
+  let fulfillmentStatusOptions = [];
+  let orderIssueOptions = [];
+  let swapDropdownOptions = [];
+  let uniqueOwnerNamesForFilter = []; 
+  let outfitOptionsForCollection = []; // This will be populated by onOutfitOptionsLoaded
+  let productCategories = {};
+  let allSizeOptions = { standard: [], waist: [], sock: [], accessoryHat: [], kids: [], bottomWInseam: [], bottomInWInseam: [] };
+  let newPieceCounter = 0;
+  let webAppUrl = null;
+  let isCurrentUserAuthorized = false;
+
+  // --- Pagination Variables ---
+  let currentPage = 1;
+  const pageSize = 100;
+  let totalOrders = 0;
+  let isLoadingOrders = false;
+
+  let currentlyEditingRow = null;
+  let currentMissingLastNameFilterActive = false; 
+
+  // --- Utility Functions ---
+  function showLoading(message = 'Loading...') {
+    $('#loadingIndicator p').text(message);
+    $('#loadingIndicator').fadeIn(200);
+  }
+
+  function hideLoading() {
+    $('#loadingIndicator').fadeOut(200);
+  }
+
+   function displayMessage(message, type = 'success', duration = 5000) {
+        const alertId = `alert-${Date.now()}`;
+        const alertClass = type === 'danger' ? 'alert-danger' : (type === 'warning' ? 'alert-warning' : 'alert-success');
+        const iconClass = type === 'danger' ? 'fa-exclamation-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : 'fa-check-circle');
+        const alertElement = $(`<div id="${alertId}" class="alert ${alertClass} alert-dismissible fade show" role="alert" style="margin-bottom: 5px;"><i class="fas ${iconClass} mr-2"></i> ${escapeHtml(message)}<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>`);
+        $('#messageArea').append(alertElement);
+        if (duration > 0) { setTimeout(() => { $(`#${alertId}`).alert('close'); }, duration); }
+    }
+
+   function clearMessages() { $('#messageArea').empty(); }
+
+   function escapeHtml(unsafe) {
+        if (unsafe === null || typeof unsafe === 'undefined') return '';
+        return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+   }
+
+   function readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            if (!file) { resolve(null); return; }
+            const reader = new FileReader();
+            reader.onload = () => resolve({ base64Data: reader.result, mimeType: file.type, fileName: file.name });
+            reader.onerror = (error) => { console.error("FileReader error:", error); reject(error); };
+            reader.readAsDataURL(file);
+        });
+    }
+  
+  // --- Initialization ---
+  $(document).ready(function() {
+    showLoading('Initializing Application...');
+    google.script.run.withSuccessHandler(onInitialDataLoaded).withFailureHandler(onFailure).getInitialAppData();
+    google.script.run.withSuccessHandler(url => { webAppUrl = url; }).withFailureHandler(onFailure).getScriptUrl();
+    setupEventListeners();
+
+    $('#mainDashboardStatsArea').show();
+    $('#ordersArea, #inventoryArea').hide();
+    $('#initialMessage').show();
+  });
+
+ function onInitialDataLoaded(data) {
+   if (data.error) { onFailure({ message: `Initialization failed: ${data.message}` }); hideLoading(); return; }
+    console.log("Initial App Data Received for Main CRM:", data);
+
+    activeCollections = data.collections || [];
+    fulfillmentStatusOptions = data.statusOptions || [];
+    orderIssueOptions = data.issueOptions || [];
+    swapDropdownOptions = data.swapOptions || [];
+    productCategories = data.productCategories || {};
+    allSizeOptions = data.allSizes || { standard: [], waist: [], sock: [], accessoryHat: [], kids: [], bottomWInseam: [], bottomInWInseam: [] };
+    isCurrentUserAuthorized = data.isAuthorizedProcessor === true;
+    allUniqueOwnerNamesGlobal = data.uniqueOwnerNames || []; 
+
+    populateCollectionSelector(); 
+    populateFilterDropdowns();
+    populateOwnerFilterDropdown(allUniqueOwnerNamesGlobal); 
+    populateModalDropdownOptions();
+    populateSwapDropdownOptionsModal();
+    populateProductCategoriesDatalist(); 
+
+    if (isCurrentUserAuthorized) {
+        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').show();
+    } else {
+        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').hide();
+    }
+
+    google.script.run.withSuccessHandler(function(allCollectionsForMetrics) {
+        allCollectionsForDashboard = allCollectionsForMetrics || [];
+        
+        const activeNamesForDashboard = (allCollectionsForDashboard || []).filter(c => c.isActive).map(c => c.name);
+        if (activeNamesForDashboard.length > 0) {
+            loadMainDashboardData(activeNamesForDashboard);
+             $('#collectionSelect').val('_all_active_'); 
+        } else {
+            $('#mainDashboardContent').html('<p class="text-center text-muted w-100">No active collections found for key metrics.</p>');
+        }
+        google.script.run.withFailureHandler(onFailure).logActivity("VIEW_ACCESS", "Loaded Main Orders Page"); 
+        hideLoading();
+    }).withFailureHandler(onFailure).getCollectionsList(); 
+    $('#initialMessage').text('Displaying Key Metrics for All Active Collections. Select a specific collection to view orders.').show();
+ }
+
+  // --- UI Population Functions ---
+  function populateCollectionSelector() {
+    const select = $('#collectionSelect');
+    select.empty();
+    select.append('<option value="_all_active_">All Active Collections (Metrics)</option>');
+    select.append('<option value="" disabled>-- Select Collection for Orders --</option>');
+
+    if (!activeCollections || activeCollections.length === 0) {
+        // No active collections
+    } else {
+       activeCollections.forEach(c => {
+           if (c && c.name) {
+              select.append($('<option>', { value: c.name, text: c.name }));
+           }
+       });
+    }
+    select.val('_all_active_'); 
+  }
+
+  function populateFilterDropdowns() {
+    const statusFilter = $('#filterStatus');
+    statusFilter.find('option:not([value=""])').remove(); 
+    fulfillmentStatusOptions.forEach(opt => statusFilter.append($('<option>', { value: opt.value, text: opt.value })));
+  }
+
+  function populateOwnerFilterDropdown(owners) {
+    const ownerSelect = $('#filterOwnerSelect');
+    const currentVal = ownerSelect.val();
+    ownerSelect.find('option:not([value=""])').remove(); 
+
+    if (owners && owners.length > 0) {
+        owners.forEach(ownerName => {
+            ownerSelect.append($('<option>', { value: ownerName, text: ownerName }));
+        });
+        if(owners.includes(currentVal)) {
+          ownerSelect.val(currentVal);
+        } else {
+          ownerSelect.val(''); 
+        }
+    } else {
+      ownerSelect.val(''); 
+    }
+  }
+
+
+  function populateModalDropdownOptions() {
+    const statusSelect = $('#modalFulfillmentStatus'); statusSelect.empty();
+    fulfillmentStatusOptions.forEach(opt => statusSelect.append($('<option>', { value: opt.value, text: opt.value })));
+
+    const issueSelect = $('#modalOrderIssue'); issueSelect.empty();
+    issueSelect.append($('<option>', { value: "", text: "-- None --" }));
+    orderIssueOptions.forEach(opt => issueSelect.append($('<option>', { value: opt.value, text: opt.value })));
+  }
+
+  function populateSwapDropdownOptionsModal() {
+    const swapSelect = $('#modalSwap');
+    swapSelect.empty();
+    swapSelect.append($('<option>', { value: "", text: "-- Select Swap Status --" }));
+    if (swapDropdownOptions.length > 0) {
+        swapDropdownOptions.forEach(opt => {
+            swapSelect.append($('<option>', { value: opt.value, text: opt.value }));
+        });
+    }
+  }
+
+  function populateOrdersTable(orders) {
+    const tableBody = $('#ordersTableBody');
+    const tableHeadRow = $('#ordersArea table thead tr');
+    tableBody.empty();
+    tableHeadRow.empty();
+
+    let headerHtml = '';
+    if (isCurrentUserAuthorized) {
+        headerHtml += '<th>ID</th>';
+    }
+    headerHtml += '<th>Contact</th> <th>Email</th> <th>Owner</th> <th>Status</th> <th>Date Ordered</th> <th>Outfit Ordered</th> <th>Bond/OMS ID</th> <th>Actions</th>';
+    tableHeadRow.html(headerHtml);
+
+    if (!orders || orders.length === 0) {
+        const colspan = isCurrentUserAuthorized ? 9 : 8;
+        tableBody.append(`<tr><td colspan="${colspan}" class="text-center text-muted">No orders found matching the current filters.</td></tr>`);
+        return;
+    }
+
+    orders.forEach(order => {
+         const contactName = order.contact || "";
+         const nameParts = contactName.trim().split(/\s+/);
+         const isMissingLastName = contactName.trim() !== "" && nameParts.length === 1;
+         const missingLastNameClass = isMissingLastName ? 'missing-lastname-highlight' : '';
+
+         const statusClass = 'status-' + (order.status || 'Unknown').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
+         const dateOrderedDisplay = order.dateOrdered || '---'; 
+         const outfitOrderedDisplay = order.outfitOrdered || '---';
+         const omsIdDisplay = order.omsId || '---';
+         const duplicateClass = order.isDuplicate ? 'table-danger' : '';
+         const orderIdEsc = escapeHtml(order.orderId || '');
+         const removedClass = order.status === 'Remove' ? 'status-removed-row' : '';
+
+
+         let rowHtml = `<tr class="${duplicateClass} ${removedClass} ${missingLastNameClass}" data-order-id="${orderIdEsc}">`;
+         if (isCurrentUserAuthorized) {
+             rowHtml += `<td><small>${orderIdEsc}</small></td>`;
+         }
+         rowHtml += `
+                <td>${escapeHtml(order.contact || '')}</td>
+                <td>${escapeHtml(order.email || '')}</td>
+                <td>${escapeHtml(order.owner || '')}</td>
+                <td><span class="badge ${statusClass}">${escapeHtml(order.status || 'N/A')}</span></td>
+                <td>${escapeHtml(dateOrderedDisplay)}</td>
+                <td>${escapeHtml(outfitOrderedDisplay)}</td>
+                <td>${escapeHtml(omsIdDisplay)}</td>
+                <td>
+                   <button class="btn btn-sm btn-primary edit-order-btn"
+                           data-order-id="${orderIdEsc}"
+                           title="Edit Order ${orderIdEsc}">
+                       <i class="fas fa-edit"></i>
+                   </button>
+                </td>
+            </tr>`;
+        tableBody.append(rowHtml);
+    });
+  }
+
+
+  function loadMainDashboardData(collectionNamesArray) {
+      if (!collectionNamesArray || collectionNamesArray.length === 0) {
+          $('#mainDashboardContent').html('<p class="text-center text-muted w-100">No collections selected for key metrics.</p>');
+          return;
+      }
+      $('#mainDashboardContent').empty().html('<p class="text-center text-muted w-100"><i>Loading key metrics...</i></p>');
+      google.script.run
+          .withSuccessHandler(function(stats) {
+              populateMainDashboard(stats);
+          })
+          .withFailureHandler(function(err) {
+              onFailure(err);
+              $('#mainDashboardContent').html('<p class="text-center text-danger w-100">Error loading key metrics.</p>');
+          })
+          .getDashboardStats(collectionNamesArray);
+  }
+
+  function populateMainDashboard(stats) {
+      const mainContent = $('#mainDashboardContent');
+      mainContent.empty();
+      if (stats.error) {
+          mainContent.html(`<p class="text-center text-danger w-100">Error loading metrics: ${escapeHtml(stats.error)}</p>`);
+          return;
+      }
+      const total = stats.totalOrders || 0;
+      const pending = stats.statusCounts && stats.statusCounts['Pending'] ? stats.statusCounts['Pending'] : 0;
+      const fulfilled = (stats.statusCounts && stats.statusCounts['Fulfilled'] ? stats.statusCounts['Fulfilled'] : 0) +
+                        (stats.statusCounts && stats.statusCounts['Resolved'] ? stats.statusCounts['Resolved'] : 0);
+      mainContent.append(`
+          <div class="col-md-4 mb-3">
+              <div class="card text-center h-100"><div class="card-body d-flex flex-column justify-content-center">
+                  <h3 class="card-title">${total}</h3><p class="card-text text-muted mb-0">Total Orders</p>
+              </div></div>
+          </div>
+          <div class="col-md-4 mb-3">
+              <div class="card text-center h-100"><div class="card-body d-flex flex-column justify-content-center">
+                  <h3 class="card-title">${pending}</h3><p class="card-text text-muted mb-0">Pending</p>
+              </div></div>
+          </div>
+          <div class="col-md-4 mb-3">
+              <div class="card text-center h-100"><div class="card-body d-flex flex-column justify-content-center">
+                  <h3 class="card-title">${fulfilled}</h3><p class="card-text text-muted mb-0">Fulfilled/Resolved</p>
+              </div></div>
+          </div>`);
+  }
+
+  function renderPaginationControls() {
+      const paginationTop = $('#paginationControlsTop');
+      const paginationBottom = $('#paginationControlsBottom');
+      paginationTop.empty(); paginationBottom.empty();
+      if (totalOrders <= pageSize) { return; }
+
+      const totalPages = Math.ceil(totalOrders / pageSize);
+      if (totalPages <= 1) return;
+      let paginationHtml = '<nav aria-label="Orders navigation"><ul class="pagination pagination-sm justify-content-center">';
+
+      paginationHtml += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${currentPage - 1}" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a></li>`;
+
+       const maxPagesToShow = 5;
+       let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+       let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+        if (endPage - startPage + 1 < maxPagesToShow) {
+            if (currentPage < (totalPages / 2)) {
+                endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+            } else {
+                startPage = Math.max(1, endPage - maxPagesToShow + 1);
+            }
+        }
+
+
+       if (startPage > 1) {
+           paginationHtml += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
+           if (startPage > 2) paginationHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+       }
+
+       for (let i = startPage; i <= endPage; i++) {
+           paginationHtml += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+       }
+
+       if (endPage < totalPages) {
+           if (endPage < totalPages - 1) paginationHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+           paginationHtml += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
+       }
+
+      paginationHtml += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${currentPage + 1}" aria-label="Next"><span aria-hidden="true">&raquo;</span></a></li>`;
+      paginationHtml += '</ul></nav>';
+
+      paginationTop.html(paginationHtml);
+      paginationBottom.html(paginationHtml);
+  }
+
+  // --- Event Handlers Setup---
+  function setupEventListeners() {
+      $('#collectionSelect').off('change').on('change', function() {
+        const selectedValue = $(this).val();
+        clearFilters(false); 
+        currentMissingLastNameFilterActive = false; 
+        $('#filterMissingLastNameBtn').removeClass('active btn-success').addClass('btn-orange');
+        $('#filterResultsMessage').text('');
+
+
+        if (selectedValue === '_all_active_') {
+            currentCollectionName = '_all_active_';
+            $('#ordersArea, #inventoryArea').hide();
+            $('#filtersCard').show(); 
+            $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', true);
+            $('#applyFiltersBtn, #clearFiltersBtn').prop('disabled', true);
+
+
+            $('#initialMessage').text('Displaying Key Metrics for All Active Collections. Select a specific collection to view orders.').show();
+
+            const activeNamesForDashboard = activeCollections.map(c => c.name);
+            if (activeNamesForDashboard.length > 0) {
+                loadMainDashboardData(activeNamesForDashboard);
+            } else {
+                $('#mainDashboardContent').html('<p class="text-center text-muted w-100">No active collections for key metrics.</p>');
+            }
+            populateOwnerFilterDropdown(allUniqueOwnerNamesGlobal); 
+        } else if (selectedValue && selectedValue !== "") {
+            currentCollectionName = selectedValue;
+            currentPage = 1; 
+            $('#initialMessage').hide();
+            $('#ordersArea').show();
+            $('#inventoryArea').hide();
+            $('#filtersCard').show();
+             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', false);
+            $('#applyFiltersBtn, #clearFiltersBtn').prop('disabled', false);
+
+            $('#mainDashboardStatsArea').show(); 
+
+            showLoading('Loading owners for ' + escapeHtml(currentCollectionName) + '...');
+            google.script.run
+                .withSuccessHandler(function(owners) {
+                    hideLoading();
+                    uniqueOwnerNamesForFilter = owners; 
+                    populateOwnerFilterDropdown(uniqueOwnerNamesForFilter);
+                    loadCollectionData(currentCollectionName); 
+                })
+                .withFailureHandler(onFailure)
+                .getOwnersForCollection(currentCollectionName);
+        } else { 
+            currentCollectionName = null;
+            $('#ordersTableBody, #paginationControlsTop, #paginationControlsBottom, #inventoryContent').empty();
+            $('#ordersArea, #inventoryArea').hide();
+            $('#filtersCard').show(); 
+            $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', true);
+            $('#applyFiltersBtn, #clearFiltersBtn').prop('disabled', true);
+
+            $('#initialMessage').text('Please select a collection to view orders or "All Active Collections" for overall metrics.').show();
+            populateOwnerFilterDropdown(allUniqueOwnerNamesGlobal); 
+            const activeNamesForDashboard = activeCollections.map(c => c.name);
+            if (activeNamesForDashboard.length > 0) {
+                loadMainDashboardData(activeNamesForDashboard);
+            } else {
+                 $('#mainDashboardContent').html('<p class="text-center text-muted w-100">No active collections for key metrics.</p>');
+            }
+        }
+      });
+
+      $('#applyFiltersBtn').off('click').on('click', applyFiltersAndLoad);
+      $('#clearFiltersBtn').off('click').on('click', function() { clearFilters(true); });
+
+
+      $('#filterOwnerSelect, #filterStatus, #filterStartDate, #filterEndDate').off('change').on('change', applyFiltersAndLoad);
+      $('#filterName, #filterEmail').off('keypress').on('keypress', function(e) {
+          if (e.which === 13) { 
+              applyFiltersAndLoad();
+          }
+      });
+      
+    $('input[name="stockFilter"]').off('change').on('change', function() {
+        applyFiltersAndLoad(); 
+    });
+
+    $('#filterMissingLastNameBtn').off('click').on('click', function() {
+        currentMissingLastNameFilterActive = !currentMissingLastNameFilterActive; 
+        if (currentMissingLastNameFilterActive) {
+            $(this).removeClass('btn-orange').addClass('active btn-success'); 
+        } else {
+            $(this).removeClass('active btn-success').addClass('btn-orange');
+        }
+        applyFiltersAndLoad(); 
+    });
+
+
+      $('#ordersTableBody').off('click', '.edit-order-btn').on('click', '.edit-order-btn', function() { handleEditOrderClick($(this)); });
+      $('#orderDetailsModal').off('hidden.bs.modal').on('hidden.bs.modal', clearEditHighlight);
+      $('#saveOrderDetailsBtn').off('click').on('click', saveOrderDetails);
+
+      // Listener for "2 outfits?" checkbox
+      $('#modalTwoOutfitsCheckbox').off('change').on('change', function() {
+            if ($(this).is(':checked')) {
+                $('#modalOutfitOrdered2Container').slideDown();
+            } else {
+                $('#modalOutfitOrdered2Container').slideUp();
+                $('#modalOutfitOrdered2').val(''); // Clear selection when hiding
+            }
+      });
+
+
+      $('#downloadCsvBtn').off('click').on('click', function() { downloadCsv(); });
+      $('#downloadImportCsvBtn').off('click').on('click', function() { downloadImportCsv(); });
+      $('#processRawBtn').off('click').on('click', function() { handleProcessRawClick(); });
+      $('#uploadRawDataBtn').off('click').on('click', function() { if (isCurrentUserAuthorized) $('#rawFileUploadInput').click(); else displayMessage("Not authorized.", "warning"); });
+      $('#rawFileUploadInput').off('change').on('change', handleRawFileUpload);
+
+      $('#viewInventoryBtn').off('click').on('click', function() {
+        handleViewInventoryClick();
+      });
+      $('#backToOrdersBtn').off('click').on('click', function() {
+        $('#inventoryArea').hide();
+        $('#mainDashboardStatsArea').show(); 
+        if (currentCollectionName && currentCollectionName !== '_all_active_') {
+             $('#filtersCard, #ordersArea').show();
+             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #applyFiltersBtn, #clearFiltersBtn, #filterMissingLastNameBtn').prop('disabled', false);
+             $('#initialMessage').hide();
+        } else { 
+            $('#ordersArea').hide(); 
+             $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #applyFiltersBtn, #clearFiltersBtn, #filterMissingLastNameBtn').prop('disabled', true);
+            $('#initialMessage').show(); 
+        }
+        clearMessages(); 
+      });
+
+      $('#inventoryContent').off('click', '.btn-edit-stock').on('click', '.btn-edit-stock', function() { handleEditInventoryClick($(this)); });
+      $('#inventoryContent').off('click', '.btn-delete-outfit').on('click', '.btn-delete-outfit', function() { handleDeleteOutfitClick($(this)); });
+      $('#saveInventoryUpdateBtn').off('click').on('click', saveInventoryUpdate);
+
+      $('#addNewOutfitBtn').off('click').on('click', handleAddNewOutfitClick);
+      $('#addPieceBtn').off('click').on('click', addPieceRow);
+      $('#newOutfitPiecesContainer').off('click', '.remove-piece-btn').on('click', '.remove-piece-btn', function() { $(this).closest('.new-piece-item').remove(); });
+      $('#newOutfitPiecesContainer').off('change', 'input[name$="[category]"]').on('change', 'input[name$="[category]"]', function() {
+           const pieceItem = $(this).closest('.new-piece-item');
+           const pieceIndex = pieceItem.attr('id'); 
+           const indexMatch = pieceIndex.match(/_new_(\d+)$/);
+           const numericIndex = indexMatch ? indexMatch[1] : null;
+           if (numericIndex !== null) updateSizeOptions(`new_${numericIndex}`, $(this).val());
+       });
+      $('#saveNewOutfitBtn').off('click').on('click', saveNewOutfit);
+
+      $('#manageProductsBtn').off('click').on('click', loadAndShowProductsModal);
+      $('#addProductForm').off('submit').on('submit', function(e){ e.preventDefault(); saveProduct(); });
+      $('#existingProductsList').off('click', '.edit-product-btn').on('click', '.edit-product-btn', function() { prepareProductFormForEdit($(this).data('name'), $(this).data('category')); });
+      $('#cancelEditProductBtn').off('click').on('click', resetProductForm);
+
+      $('#manageCollectionsBtn').off('click').on('click', loadAndShowCollectionsModal);
+      $('#addEditCollectionForm').off('submit').on('submit', function(e){ e.preventDefault(); saveCollection(); });
+      $('#existingCollectionsList').off('click', '.edit-collection-btn').on('click', '.edit-collection-btn', function() { prepareCollectionFormForEdit($(this).data('name'), $(this).data('promo'), $(this).data('active')); });
+      $('#cancelEditCollectionBtn').off('click').on('click', resetCollectionForm);
+      $('#existingCollectionsList').off('click', '.archive-collection-btn').on('click', '.archive-collection-btn', function() {
+        const collectionName = $(this).data('name');
+        if (!collectionName) { displayMessage("Cannot archive: Collection name missing.", "danger"); return; }
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized to archive collections.", "warning"); return; }
+        clearMessages();
+        if (confirm(`ARE YOU SURE you want to archive the collection "${escapeHtml(collectionName)}"?\n\nThis will move its Orders and Inventory data to the Historical spreadsheet and remove them from the Active system.\nThis action cannot be easily undone.`)) {
+            showLoading(`Archiving collection ${escapeHtml(collectionName)}...`);
+            google.script.run
+                .withSuccessHandler(onArchiveCollectionSuccess)
+                .withFailureHandler(onArchiveCollectionFailure)
+                .archiveCollection(collectionName);
+        }
+      });
+      $('#paginationControlsTop, #paginationControlsBottom').off('click', '.page-link').on('click', '.page-link', function(e) {
+          e.preventDefault();
+          handlePaginationClick($(this));
+      });
+  }
+
+  // --- Event Handler Functions ---
+  function handleEditOrderClick($button) {
+      clearMessages();
+      const orderId = $button.data('order-id');
+      if (!orderId) { console.error("Order ID missing from button:", $button); displayMessage("Cannot load order: ID missing.", "danger"); return; }
+
+      const $currentRow = $button.closest('tr');
+      clearEditHighlight(); 
+      $currentRow.addClass('table-row-editing'); 
+      currentlyEditingRow = $currentRow;
+
+      $('#modalDuplicateWarning').hide(); $('#modalOtherOrderIds').text('');
+      
+      showLoading('Loading order details...');
+      google.script.run
+          .withSuccessHandler(onOrderDetailsLoaded)
+          .withFailureHandler(onFailure)
+          .getOrderDetails(orderId);
+  }
+
+  function clearEditHighlight() {
+       if (currentlyEditingRow) {
+           currentlyEditingRow.removeClass('table-row-editing');
+           currentlyEditingRow = null;
+       }
+  }
+
+  function handleProcessRawClick() {
+       if (!currentCollectionName || currentCollectionName === '_all_active_') { displayMessage('Please select a specific collection first to process raw data for.', 'warning'); return; }
+       if (!isCurrentUserAuthorized) { displayMessage("Not authorized to process raw data.", "warning"); return; }
+       if (confirm(`Process 'RawImport' sheet for collection: "${escapeHtml(currentCollectionName)}"?\n\nThis will add the orders from the 'RawImport' sheet (in the Active data spreadsheet) to the main 'Orders' sheet for this collection and then CLEAR the 'RawImport' sheet.\n\nMake sure the correct data is in 'RawImport' before proceeding.`)) {
+           showLoading(`Processing Raw Data for ${escapeHtml(currentCollectionName)}...`);
+           google.script.run.withSuccessHandler(onRawDataProcessed).withFailureHandler(onFailure).processRawImportData(currentCollectionName);
+       }
+  }
+
+  function handleViewInventoryClick() {
+       if (currentCollectionName && currentCollectionName !== '_all_active_') {
+           $('#mainDashboardStatsArea, #ordersArea, #filtersCard').hide(); 
+           $('#inventoryArea').show(); 
+           loadInventoryData(currentCollectionName);
+       } else {
+           displayMessage('Please select a specific collection first to view its inventory.', 'warning');
+       }
+  }
+
+    function handleEditInventoryClick($button) {
+        const outfitName = $button.data('outfit-name');
+        if (currentCollectionName && currentCollectionName !== '_all_active_' && outfitName) {
+            loadInventoryForUpdate(currentCollectionName, outfitName);
+        } else {
+             displayMessage('Cannot edit - specific collection or outfit name missing.', 'warning');
+        }
+   }
+
+   function handleDeleteOutfitClick($button) {
+       const outfitName = $button.data('outfit-name');
+       if (!currentCollectionName || currentCollectionName === '_all_active_' || !outfitName) { displayMessage("Cannot delete - specific collection or outfit name missing.", "warning"); return; }
+       if (!isCurrentUserAuthorized) { displayMessage("Not authorized to delete outfits.", "warning"); return; }
+       clearMessages();
+       if (confirm(`ARE YOU SURE you want to permanently delete the outfit "${escapeHtml(outfitName)}" and its image from the "${escapeHtml(currentCollectionName)}" collection?\n\nThis action cannot be undone.`)) {
+            showLoading(`Deleting outfit ${escapeHtml(outfitName)}...`);
+            google.script.run
+                .withSuccessHandler(onDeleteOutfitSuccess)
+                .withFailureHandler(onFailure)
+                .deleteOutfit(currentCollectionName, outfitName);
+        }
+   }
+
+   function handleAddNewOutfitClick() {
+        if (!currentCollectionName || currentCollectionName === '_all_active_') { displayMessage('Select a specific collection first to add an outfit.', 'warning'); return; }
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized to add outfits.", "warning"); return; }
+        clearMessages(); newPieceCounter = 0;
+        $('#addOutfitForm')[0].reset();
+        $('#addOutfitForm').removeClass('was-validated');
+        $('#newOutfitPiecesContainer').empty();
+        addPieceRow(); 
+        $('#addOutfitCollectionName').text(escapeHtml(currentCollectionName));
+        $('#addOutfitCollectionHidden').val(currentCollectionName);
+        $('#addOutfitModal').modal('show');
+         setTimeout(() => {$('#addOutfitModal .selectpicker').selectpicker('render');}, 200); 
+   }
+
+   function handlePaginationClick($link) {
+        if ($link.parent().hasClass('disabled') || $link.parent().hasClass('active')) return; 
+        const newPage = parseInt($link.data('page'));
+        if (newPage && newPage !== currentPage) {
+            currentPage = newPage;
+            if (currentCollectionName && currentCollectionName !== '_all_active_') loadOrdersOnly(currentCollectionName);
+        }
+    }
+
+   function handleRawFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (!/\.(csv|tsv|txt)$/i.test(file.name)) { 
+             displayMessage("Invalid file type. Please upload CSV, TSV, or TXT.", "warning");
+             resetFileInput(); return;
+        }
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized to upload data.", "warning"); resetFileInput(); return; }
+
+        showLoading(`Uploading ${escapeHtml(file.name)}...`);
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            google.script.run
+                .withSuccessHandler(onRawDataUploaded)
+                .withFailureHandler(onFailure)
+                .uploadRawDataToSheet(e.target.result, file.name);
+        };
+        reader.onerror = function(e) { 
+             hideLoading();
+             onFailure({ message: "Error reading file." });
+             resetFileInput();
+        };
+        reader.readAsText(file); 
+   }
+
+    // --- Data Loading Functions ---
+  function loadCollectionData(collectionName) {
+    if (isLoadingOrders) return; 
+    if (!collectionName || collectionName === '_all_active_') {
+        console.warn("loadCollectionData called without a specific collection name.");
+        $('#ordersTableBody, #paginationControlsTop, #paginationControlsBottom').empty();
+        $('#ordersArea').hide();
+        $('#initialMessage').text('Select a specific collection to view orders.').show();
+        const activeNames = activeCollections.map(c => c.name);
+        if(activeNames.length > 0) loadMainDashboardData(activeNames); 
+        return;
+    }
+    showLoading(`Loading data for ${escapeHtml(collectionName)}...`);
+    $('#ordersListTitle span').text(escapeHtml(collectionName));
+    $('#ordersTableBody').empty().html(`<tr><td colspan="${isCurrentUserAuthorized ? 9 : 8}" class="text-center text-muted"><i>Loading orders...</i></td></tr>`);
+    $('#paginationControlsTop, #paginationControlsBottom').empty();
+    $('#inventoryContent').empty(); 
+
+    loadOrdersOnly(collectionName); 
+    loadMainDashboardData([collectionName]); 
+    google.script.run.withSuccessHandler(onOutfitOptionsLoaded).withFailureHandler(onFailure).getInventoryByCollection(collectionName); 
+    clearMessages();
+  }
+
+  function loadOrdersOnly(collectionName) {
+      if (isLoadingOrders) return;
+      if (!collectionName || collectionName === '_all_active_') {
+          $('#ordersTableBody').empty();
+          $('#paginationControlsTop, #paginationControlsBottom').empty();
+          return;
+      }
+      isLoadingOrders = true;
+      showLoading(`Loading orders for ${escapeHtml(collectionName)} (Page ${currentPage})...`);
+      $('#ordersTableBody').css('opacity', 0.5); 
+      const filters = getCurrentFilters();
+      google.script.run
+        .withSuccessHandler(onOrdersOnlyLoaded)
+        .withFailureHandler(onOrdersLoadFailure)
+        .getFilteredOrders(collectionName, filters, currentPage, pageSize);
+  }
+
+  // --- Callback Handlers ---
+  function onOrdersOnlyLoaded(result) {
+      isLoadingOrders = false; hideLoading();
+      $('#ordersTableBody').css('opacity', 1); 
+      const filterResultMessage = $('#filterResultsMessage'); 
+
+      if (result.error) {
+          displayMessage(`Error loading orders: ${escapeHtml(result.error)}`, 'danger');
+          const colspan = isCurrentUserAuthorized ? 9 : 8;
+          $('#ordersTableBody').empty().html(`<tr><td colspan="${colspan}" class="text-center text-danger">Error loading orders.</td></tr>`);
+          totalOrders = 0; 
+          if (currentCollectionName && currentCollectionName !== '_all_active_') {
+            filterResultMessage.text('Error loading orders.').addClass('text-danger'); 
+          } else {
+            filterResultMessage.text('');
+          }
+      } else {
+          totalOrders = result.totalOrderCount;
+          populateOrdersTable(result.orders);
+          if (currentCollectionName && currentCollectionName !== '_all_active_') { 
+            if (totalOrders > 0) {
+                filterResultMessage.text(`Found ${totalOrders} order(s).`).removeClass('text-danger'); 
+            } else {
+                filterResultMessage.text('No orders found.').addClass('text-danger'); 
+            }
+          } else {
+            filterResultMessage.text(''); 
+          }
+      }
+      renderPaginationControls(); 
+  }
+
+  function onOrdersLoadFailure(error) {
+      isLoadingOrders = false; hideLoading();
+      $('#ordersTableBody').css('opacity', 1); 
+      onFailure(error); 
+      const colspan = isCurrentUserAuthorized ? 9 : 8;
+      $('#ordersTableBody').empty().html(`<tr><td colspan="${colspan}" class="text-center text-danger">Error loading orders. Check logs.</td></tr>`);
+      totalOrders = 0; renderPaginationControls(); 
+  }
+
+  // This function is CALLED when getInventoryByCollection SUCCEEDS
+  // It populates the global outfitOptionsForCollection AND the dropdowns
+  function onOutfitOptionsLoaded(inventoryData) { 
+    const outfitSelect = $('#modalOutfitOrdered');
+    const outfitSelect2 = $('#modalOutfitOrdered2'); 
+    const currentVal1 = outfitSelect.val(); // Preserve current selection if possible for first dropdown
+    const currentVal2 = outfitSelect2.val(); // Preserve current selection for second dropdown
+
+    outfitSelect.find('option:not([value=""]):not([value="N/A"]):not([value="ALL"])').remove(); 
+    outfitSelect2.find('option:not([value=""]):not([value="N/A"]):not([value="ALL"])').remove(); 
+
+    // Update the global variable with the fresh data
+    outfitOptionsForCollection = (inventoryData || []) 
+        .filter(o => o.isActive === true) 
+        .map(o => o.name)
+        .sort((a,b) => a.localeCompare(b, undefined, {numeric: true})); 
+
+    // Populate dropdowns using the freshly updated global variable
+    outfitOptionsForCollection.forEach(name => {
+        outfitSelect.append($('<option>', {value: name, text: name}));
+        outfitSelect2.append($('<option>', {value: name, text: name})); 
+    });
+
+    // Restore previous selections if they are still valid in the new list
+    if(outfitOptionsForCollection.includes(currentVal1)) outfitSelect.val(currentVal1); else outfitSelect.val('');
+    if(outfitOptionsForCollection.includes(currentVal2)) outfitSelect2.val(currentVal2); else outfitSelect2.val('');
+  }
+
+  // --- Filter Handling ---
+  function getCurrentFilters() {
+    const filters = {};
+    const owner = $('#filterOwnerSelect').val();
+    const nameSearch = $('#filterName').val().trim();
+    const status = $('#filterStatus').val();
+    const startDate = $('#filterStartDate').val(); 
+    const endDate = $('#filterEndDate').val();   
+    const emailSearch = $('#filterEmail').val().trim();
+    const stockFilter = $('input[name="stockFilter"]:checked').val();
+
+    if (owner) filters.owner = owner;
+    if (nameSearch) filters.nameSearch = nameSearch;
+    if (status) filters.status = status;
+    
+    if (startDate) filters.dateRangeStart = startDate; 
+    if (endDate) filters.dateRangeEnd = endDate;     
+
+    if (emailSearch) filters.emailSearch = emailSearch;
+    if (stockFilter) filters.stockFilter = stockFilter;
+    if (currentMissingLastNameFilterActive) filters.missingLastName = true;
+
+    return filters;
+  }
+
+  function clearFilters(triggerLoad = true) {
+    $('#filterOwnerSelect').val('');
+    if (currentCollectionName && currentCollectionName !== '_all_active_') {
+        populateOwnerFilterDropdown(uniqueOwnerNamesForFilter);
+    } else {
+        populateOwnerFilterDropdown(allUniqueOwnerNamesGlobal);
+    }
+
+    $('#filterName').val('');
+    $('#filterEmail').val('');
+    $('#filterStatus').val('');
+    $('#filterStartDate').val(''); 
+    $('#filterEndDate').val('');   
+    $('#stockFilterAll').prop('checked', true).parent().addClass('active').siblings().removeClass('active'); 
+    
+    currentMissingLastNameFilterActive = false; 
+    $('#filterMissingLastNameBtn').removeClass('active btn-success').addClass('btn-orange'); 
+    
+    $('#filterResultsMessage').text(''); 
+
+    if (triggerLoad && currentCollectionName && currentCollectionName !== '_all_active_') {
+      applyFiltersAndLoad();
+    } else if (triggerLoad && (!currentCollectionName || currentCollectionName === '_all_active_')) {
+      $('#ordersTableBody, #paginationControlsTop, #paginationControlsBottom').empty();
+      if (currentCollectionName === '_all_active_') {
+        $('#ordersArea').hide();
+        $('#initialMessage').text('Displaying Key Metrics for All Active Collections. Select a specific collection to view orders.').show();
+      } else { 
+        $('#ordersArea').hide();
+        $('#initialMessage').text('Please select a collection to view orders.').show();
+      }
+    }
+  }
+
+  function applyFiltersAndLoad() {
+       const filterResultMessage = $('#filterResultsMessage'); 
+       if (currentCollectionName && currentCollectionName !== '_all_active_') {
+           currentPage = 1; 
+           filterResultMessage.text('Searching...').removeClass('text-danger'); 
+           loadOrdersOnly(currentCollectionName);
+       } else if (currentCollectionName === '_all_active_') {
+           displayMessage('Filters apply when a specific collection is selected for orders.', 'info');
+           $('#ordersTableBody, #paginationControlsTop, #paginationControlsBottom').empty(); 
+           filterResultMessage.text(''); 
+       } else { 
+           $('#ordersTableBody, #paginationControlsTop, #paginationControlsBottom').empty();
+           $('#ordersArea').hide();
+           $('#initialMessage').show();
+           displayMessage('Please select a collection to apply filters.', 'warning');
+           filterResultMessage.text(''); 
+       }
+   }
+  // --- Order Details Modal Functions ---
+  function onOrderDetailsLoaded(orderData) {
+        hideLoading();
+        if (!orderData) { displayMessage('Error: Could not load order details.', 'danger'); clearEditHighlight(); return; }
+        console.log("Order Details Loaded for Modal:", orderData);
+
+        const originalOrderDataForForm = JSON.parse(JSON.stringify(orderData)); 
+        $('#orderDetailsForm').data('original-values', originalOrderDataForForm);
+        $('#modalOMS_ID').data('original-value', String(orderData.OMS_ID || '')); 
+        $('#modalOrderIssue').data('original-value', orderData.OrderIssue || '');
+
+
+        if (orderData.duplicateInfo && orderData.duplicateInfo.isDuplicate) {
+            $('#modalDuplicateWarning').show();
+            $('#modalOtherOrderIds').text(orderData.duplicateInfo.otherOrderIds.length > 0 ? orderData.duplicateInfo.otherOrderIds.join(', ') : 'None found.');
+        } else {
+             $('#modalDuplicateWarning').hide();
+        }
+
+        const highlightsDiv = $('#modalOrderHighlights');
+        highlightsDiv.empty().hide(); 
+        let highlightParts = [];
+        const inseamForHighlight = orderData.INSEAM ? orderData.INSEAM.toString().trim() : "";
+        const outfitsRawForHighlight = orderData.OutfitsRawOriginal ? orderData.OutfitsRawOriginal.toString().trim() : "";
+        const generalNotesForHighlight = orderData.GeneralNotes ? orderData.GeneralNotes.toString().trim() : "";
+
+        if (inseamForHighlight) {
+            highlightParts.push(`<strong>INSEAM:</strong> ${escapeHtml(inseamForHighlight)}`);
+        }
+        if (outfitsRawForHighlight) {
+            highlightParts.push(`<strong># Outfits:</strong> ${escapeHtml(outfitsRawForHighlight)}`);
+        }
+        if (generalNotesForHighlight) {
+            let generalNotesSnippet = generalNotesForHighlight;
+            if (generalNotesSnippet.length > 100) { 
+                generalNotesSnippet = generalNotesSnippet.substring(0, 97) + "...";
+            }
+            highlightParts.push(`<strong>General Notes:</strong> ${escapeHtml(generalNotesSnippet)}`);
+        }
+
+        if (highlightParts.length > 0) {
+            highlightsDiv.html(`<p class="modal-title-note-relocated">${highlightParts.join(' &nbsp; | &nbsp; ')}</p>`); 
+            highlightsDiv.show();
+        }
+
+        $('#modalOrderID').val(orderData.OrderID);
+        $('#modalCollectionName').val(orderData.COLLECTION_NAME); 
+        $('#modalContactName').text(escapeHtml(orderData.ContactNameForTitle || 'N/A')); 
+
+        const contactFullName = orderData.Contact || '';
+        const firstSpaceIndex = contactFullName.indexOf(' ');
+        let firstName = ''; let lastName = '';
+        if (firstSpaceIndex === -1) { 
+            firstName = contactFullName;
+        } else {
+            firstName = contactFullName.substring(0, firstSpaceIndex);
+            lastName = contactFullName.substring(firstSpaceIndex + 1);
+        }
+        $('#modalFirstName').val(firstName);
+        $('#modalLastName').val(lastName);
+        
+        $('#contactNameWarning').empty(); 
+        if (firstName && !lastName && firstName === contactFullName.trim()) { 
+            $('#contactNameWarning').html('<p style="color: red; font-weight: bold;">Missing complete first and last name.</p><p class="text-muted small"><em>Perhaps flag this order as \'Needs Review\' for a quick double-check?</em></p>');
+        }
+        
+        $('#modalEmail').val(orderData.Email || '');
+        $('#modalOwner').val(orderData.Owner || '');
+        $('#modalStreetAddress').val(orderData.StreetAddress || '');
+        $('#modalCity').val(orderData.City || '');
+        $('#modalStateAbbreviated').val(orderData.StateAbbreviated || '');
+        $('#modalZipFormatted').val(orderData.ZipFormatted || '');
+        
+        const inseamInput = $('#modalINSEAM');
+        inseamInput.val(inseamForHighlight); 
+        if (inseamForHighlight.trim() !== '') {
+            inseamInput.addClass('highlight-inseam');
+        } else {
+            inseamInput.removeClass('highlight-inseam');
+        }
+        inseamInput.off('input.inseamHighlight').on('input.inseamHighlight', function() { 
+            if ($(this).val().trim() !== '') {
+                $(this).addClass('highlight-inseam');
+            } else {
+                $(this).removeClass('highlight-inseam');
+            }
+        });
+
+        const numOutfitsTextarea = $('#modalNumOutfits');
+        numOutfitsTextarea.val(outfitsRawForHighlight);
+        if (outfitsRawForHighlight.trim() !== '') { numOutfitsTextarea.addClass('highlight-green-bold'); } else { numOutfitsTextarea.removeClass('highlight-green-bold'); }
+        numOutfitsTextarea.off('input.outfitsHighlight').on('input.outfitsHighlight', function() { if ($(this).val().trim() !== '') { $(this).addClass('highlight-green-bold'); } else { $(this).removeClass('highlight-green-bold'); } });
+
+        $('#modalGeneralNotes').val(orderData.GeneralNotes || ''); 
+        $('#modalOutfitUnavailableNotes').val(orderData.OutfitUnavailableNotes || '');
+
+        const prefsList = $('#modalPreferencesList'); prefsList.empty();
+        if (orderData.preferenceStockStatus && orderData.preferenceStockStatus.length > 0) {
+             orderData.preferenceStockStatus.forEach((prefInfo, index) => {
+                  const fileId = prefInfo.imageUrl;
+                  const imageContainerId = `pref-img-cont-${index}-${Date.now()}`; 
+                  let imageHtml = `<div id="${imageContainerId}" class="pref-image-placeholder">[No Image]</div>`;
+
+                  if (fileId) {
+                       imageHtml = `<div id="${imageContainerId}" class="pref-image-placeholder">[Loading...]</div>`;
+                       google.script.run
+                           .withSuccessHandler((imgData) => { 
+                               if (imgData && imgData.base64 && imgData.mimeType) { 
+                                   $(`#${imageContainerId}`).empty().append($('<img>').attr('src', `data:${imgData.mimeType};base64,${imgData.base64}`).addClass('pref-image').attr('alt', escapeHtml(prefInfo.preference.replace(/\s*\(.*?\)$/, ''))).on('error', function() { $(this).parent().html('[Image Load Error]'); })); 
+                               } else { $(`#${imageContainerId}`).html('[No Image Data]'); } 
+                           })
+                           .withFailureHandler((err) => { $(`#${imageContainerId}`).html('[Image Fetch Error]'); console.error("Image fetch error:", err); })
+                           .getImageData(fileId);
+                  }
+
+                  const stockClass = 'stock-' + (prefInfo.overallStatus || 'Unknown').replace(/\s+/g, '-').toLowerCase();
+                  let piecesHtml = '<div class="pref-stock-details">';
+                  if (prefInfo.pieceStatus && prefInfo.pieceStatus.length > 0) {
+                       prefInfo.pieceStatus.forEach(p => { piecesHtml += `<div><strong style="font-size: 1em;">${escapeHtml(p.productName)}</strong></div><div style="padding-left: 15px;"><small>SKU: <strong style="font-size: 1em;">${escapeHtml(p.sku)}</strong> | Color: ${escapeHtml(p.color || 'N/A')} | Size: <strong style="font-size: 1em;">${escapeHtml(p.requiredSize)}</strong> &rarr; <span style="font-weight:bold;">${escapeHtml(p.status)}</span><span class="text-muted">${escapeHtml(p.note)}</span></small></div>`; });
+                  } else piecesHtml += '<div class="text-muted">No piece details available.</div>';
+                  piecesHtml += '</div>';
+                  const outfitTitle = prefInfo.preference.replace(/\s*\(.*?\)$/, ''); 
+                  const itemHtml = `<div class="preference-item d-flex mb-3"><div class="mr-3 flex-shrink-0" style="width: 80px; height: 100px; background-color: #f0f0f0; display:flex; align-items:center; justify-content:center; overflow:hidden;">${imageHtml}</div><div class="flex-grow-1"><h6><span class="pref-text">${index + 1}. ${escapeHtml(outfitTitle)}</span><span class="stock-status-badge ${stockClass}">${escapeHtml(prefInfo.overallStatus)}</span></h6>${piecesHtml}</div></div><hr class="my-2">`;
+                  prefsList.append(itemHtml);
+             });
+        } else { prefsList.append('<p class="text-muted">No outfit preferences listed for this order.</p>'); }
+
+        // Handle "2 outfits?" checkbox and dropdowns
+        const twoOutfitsCheckbox = $('#modalTwoOutfitsCheckbox');
+        const outfitOrdered1Select = $('#modalOutfitOrdered');
+        const outfitOrdered2Select = $('#modalOutfitOrdered2');
+        const outfitOrdered2Container = $('#modalOutfitOrdered2Container');
+
+        // Dropdowns are populated once when collection inventory loads (by onOutfitOptionsLoaded)
+        // Here, we just set their values.
+        const outfitOrderedString = orderData.OutfitOrdered || "";
+        if (outfitOrderedString.includes(',')) {
+            const parts = outfitOrderedString.split(',');
+            outfitOrdered1Select.val(parts[0] ? parts[0].trim() : '');
+            outfitOrdered2Select.val(parts[1] ? parts[1].trim() : '');
+            twoOutfitsCheckbox.prop('checked', true);
+            outfitOrdered2Container.show(); // Ensure it's visible if two outfits
+        } else {
+            outfitOrdered1Select.val(outfitOrderedString);
+            outfitOrdered2Select.val(''); // Clear second dropdown
+            twoOutfitsCheckbox.prop('checked', false);
+            outfitOrdered2Container.hide(); // Ensure it's hidden if one or no outfit
+        }
+        
+        let dateOrderedDisplayStr = ""; 
+        let rawDateOrderedForInput = "";
+
+        const dateOrderedFromData = String(orderData.DateOrdered || "").trim();
+        if (dateOrderedFromData && dateOrderedFromData.toUpperCase() !== "N/A") { 
+            const dateObj = new Date(dateOrderedFromData.replace(/-/g, '/')); 
+            if (!isNaN(dateObj.getTime())) {
+                const pad = (n) => (n < 10 ? '0' : '') + n;
+                rawDateOrderedForInput = `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())} ${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:${pad(dateObj.getSeconds())}`;
+                if (dateObj.getHours() === 0 && dateObj.getMinutes() === 0 && dateObj.getSeconds() === 0 && dateOrderedFromData.indexOf(' ') === -1) {
+                     dateOrderedDisplayStr = `${pad(dateObj.getMonth() + 1)}/${pad(dateObj.getDate())}/${dateObj.getFullYear()}`;
+                } else {
+                    dateOrderedDisplayStr = `${pad(dateObj.getMonth() + 1)}/${pad(dateObj.getDate())}/${dateObj.getFullYear()} ${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:${pad(dateObj.getSeconds())}`;
+                }
+            } else {
+                 dateOrderedDisplayStr = ""; 
+            }
+        }
+        $('#modalDateOrderedDisplay').text(dateOrderedDisplayStr || ""); 
+        $('#modalDateOrdered').val(rawDateOrderedForInput);
+
+        $('#modalOMS_ID').val(orderData.OMS_ID || '');
+        $('#modalOMS_Cost').val(orderData.OMS_Cost || '');
+        $('#modalFulfillmentStatus').val(orderData.FulfillmentStatus || 'Pending'); 
+        $('#modalOrderIssue').val(orderData.OrderIssue || '');
+        $('#modalPromoCodeUsed').val(orderData.PromoCodeUsedDisplay || 'N/A'); 
+        $('#modalSwap').val(orderData.Swap || '');
+
+        $('#saveOrderDetailsBtn').show(); 
+        $('#orderDetailsModal').modal('show');
+    }
+
+    function saveOrderDetails() {
+        $('#modalSpinner').show(); $('#saveOrderDetailsBtn').prop('disabled', true); clearMessages();
+        
+        const formDataArray = $('#orderDetailsForm').serializeArray();
+        const tempFormData = {}; 
+        formDataArray.forEach(item => { 
+            if (tempFormData[item.name]) {
+                if (!Array.isArray(tempFormData[item.name])) {
+                    tempFormData[item.name] = [tempFormData[item.name]];
+                }
+                tempFormData[item.name].push(item.value);
+            } else {
+                tempFormData[item.name] = item.value;
+            }
+        });
+        
+        const formData = {};
+        for (const key in tempFormData) {
+            if (key !== 'OutfitOrdered' && key !== 'OutfitOrdered2') { 
+                formData[key] = tempFormData[key];
+            }
+        }
+
+        let outfit1Value = tempFormData['OutfitOrdered'] ? String(tempFormData['OutfitOrdered']).trim() : "";
+        let outfit2Value = $('#modalTwoOutfitsCheckbox').is(':checked') ? (tempFormData['OutfitOrdered2'] ? String(tempFormData['OutfitOrdered2']).trim() : "") : ""; // Only consider outfit2 if checkbox is checked
+
+        let finalOutfitOrdered = outfit1Value;
+        if (outfit2Value) { // If outfit2Value has content (meaning checkbox was checked and it had a value)
+            if (finalOutfitOrdered) { // If outfit1 also has content
+                finalOutfitOrdered += ", " + outfit2Value;
+            } else { // If outfit1 was empty, but outfit2 has content
+                finalOutfitOrdered = outfit2Value;
+            }
+        }
+        formData['OutfitOrdered'] = finalOutfitOrdered;
+
+
+        const originalDataFromStorage = $('#orderDetailsForm').data('original-values') || {}; 
+        const omsIdFromForm = String(formData.OMS_ID || "").trim(); 
+        const outfitOrderedFromForm = String(formData.OutfitOrdered || "").trim();
+
+        if (omsIdFromForm && !outfitOrderedFromForm) {
+            displayMessage('Please select "Which outfit was ordered?" when Bond/OMS ID# is provided.', 'danger', 0);
+            $('#modalSpinner').hide(); $('#saveOrderDetailsBtn').prop('disabled', false);
+            $('#modalOutfitOrdered').addClass('is-invalid').focus(); 
+            return;
+        } else {
+            $('#modalOutfitOrdered').removeClass('is-invalid'); 
+        }
+        
+        const originalOmsId = String($('#modalOMS_ID').data('original-value') || "").trim(); 
+        const originalDateOrderedString = String(originalDataFromStorage.DateOrdered || "").trim(); 
+
+        let newDateOrderedValue = originalDateOrderedString; 
+
+        console.log("Save Logic - OMS Form:", `'${omsIdFromForm}'`, "Original OMS:", `'${originalOmsId}'`);
+        console.log("Save Logic - Original DateOrdered String:", `'${originalDateOrderedString}'`);
+
+        if (omsIdFromForm && omsIdFromForm !== originalOmsId) {
+            // OMS ID's value has changed from a non-empty original to a different non-empty value, OR
+            // OMS ID was empty and is now filled.
+            const now = new Date();
+            const pad = (num) => (num < 10 ? '0' : '') + num;
+            newDateOrderedValue = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            console.log("Date Ordered updated: OMS_ID changed or newly filled. New Date:", newDateOrderedValue);
+        } else if (!omsIdFromForm && originalOmsId) {
+            // OMS ID was filled and is now cleared
+            newDateOrderedValue = "";
+            console.log("Date Ordered cleared: OMS_ID was removed.");
+        }
+        // Else: OMS ID is the same as original (either both were empty, or both were the same non-empty value).
+        // In this case, newDateOrderedValue remains originalDateOrderedString.
+        else {
+             console.log("Date Ordered unchanged: OMS_ID state did not trigger update/clear. Kept:", newDateOrderedValue);
+        }
+        
+        formData.DateOrdered = newDateOrderedValue;
+        $('#modalDateOrdered').val(formData.DateOrdered); 
+
+        console.log("Final formData being sent:", formData);
+
+        google.script.run
+            .withSuccessHandler(onOrderSaveSuccess)
+            .withFailureHandler(onOrderSaveFailure)
+            .updateOrder(formData);
+    }
+
+    function onOrderSaveSuccess(result) {
+        $('#modalSpinner').hide(); $('#saveOrderDetailsBtn').prop('disabled', false);
+        if (result?.success) {
+            $('#orderDetailsModal').modal('hide');
+            displayMessage(result.message || 'Order updated successfully!', 'success');
+            clearEditHighlight(); 
+             if (currentCollectionName && currentCollectionName !== '_all_active_') {
+                loadOrdersOnly(currentCollectionName); 
+                loadMainDashboardData([currentCollectionName]); 
+             } else if (currentCollectionName === '_all_active_') { 
+                const activeNamesForDashboard = activeCollections.map(c => c.name);
+                if (activeNamesForDashboard.length > 0) loadMainDashboardData(activeNamesForDashboard);
+             }
+        } else {
+             displayMessage(result.message || 'Failed to save order.', 'danger', 0); 
+        }
+    }
+  // ... (The rest of your JavaScript code: onOrderSaveFailure, inventory functions, product management, collection management, CSV, Raw Data, onFailure, etc.) ...
+    function onOrderSaveFailure(error) { $('#modalSpinner').hide(); $('#saveOrderDetailsBtn').prop('disabled', false); onFailure(error); displayMessage('Error saving order details. See console/logs.', 'danger', 0); }
+
+    function loadInventoryData(collectionName) {
+        if (!collectionName || collectionName === '_all_active_') return; 
+        showLoading(`Loading inventory for ${escapeHtml(collectionName)}...`);
+        $('#inventoryContent').empty().html('<p class="text-center w-100 my-5"><div class="spinner-border text-info"></div> Loading inventory...</p>');
+        $('#inventoryListTitle span').text(escapeHtml(collectionName)); 
+        google.script.run.withSuccessHandler(onInventoryDataLoaded).withFailureHandler(onFailure).getInventoryByCollection(collectionName);
+    }
+    
+    function onInventoryDataLoaded(inventoryData) {
+        hideLoading();
+        const inventoryContent = $('#inventoryContent'); inventoryContent.empty();
+
+         if (!inventoryData || inventoryData.length === 0) {
+            inventoryContent.append('<div class="col-12"><p class="text-center text-muted my-4">No inventory items found for this collection.</p></div>');
+            return;
+        }
+
+        inventoryData.forEach(outfit => {
+            let piecesHtml = '';
+            let overallOutfitStatus = 'Available'; 
+            let hasOOSPiece = false;
+            let hasAvailablePiece = false;
+            let reliesOnSwap = false;
+
+            if (outfit.pieces && outfit.pieces.length > 0) {
+                outfit.pieces.forEach(piece => {
+                    let currentPieceAvailable = false;
+                    const catUpper = (piece.category || '').toUpperCase();
+
+                    if (catUpper === 'ACCESSORY' || catUpper === 'HAT') { 
+                        if (piece.availableSizes && piece.availableSizes.length > 0 && piece.availableSizes[0].toUpperCase() === 'YES') {
+                            currentPieceAvailable = true;
+                        }
+                    } else { 
+                        if (piece.availableSizes && piece.availableSizes.length > 0) {
+                            currentPieceAvailable = true;
+                        }
+                    }
+
+                    if (currentPieceAvailable) {
+                        hasAvailablePiece = true;
+                    } else {
+                        if (piece.swapSku && piece.swapAvailableSizes && piece.swapAvailableSizes.length > 0) {
+                            reliesOnSwap = true; hasAvailablePiece = true; 
+                        } else {
+                            hasOOSPiece = true; 
+                        }
+                    }
+
+                    let sizesHtml = '';
+                    if (catUpper === 'ACCESSORY' || catUpper === 'HAT') {
+                        const availText = (piece.availableSizes && piece.availableSizes.length > 0) ? piece.availableSizes[0] : 'No';
+                        sizesHtml = `<span class="badge badge-pill ${availText.toUpperCase() === 'YES' ? 'badge-success' : 'badge-secondary'}">${escapeHtml(availText)}</span>`;
+                    } else if (piece.availableSizes.length > 0) {
+                         sizesHtml = piece.availableSizes.map(s => `<span class="badge badge-pill badge-light mr-1">${escapeHtml(s)}</span>`).join(' ');
+                    } else { sizesHtml = '<span class="text-muted font-italic">None</span>'; }
+
+                    const swapSizesHtml = piece.swapAvailableSizes.length > 0 ? piece.swapAvailableSizes.map(s => `<span class="badge badge-pill badge-light mr-1">${escapeHtml(s)}</span>`).join(' ') : '<span class="text-muted font-italic">None</span>';
+                    const notesText = piece.notes ? escapeHtml(piece.notes) : '';
+                    const etaText = piece.eta ? escapeHtml(piece.eta) : '';
+                    
+                    const swapHtml = piece.swapSku ? `<div class="swap-info mt-1"><i class="fas fa-exchange-alt text-info"></i> Swap: ${escapeHtml(piece.swapSku)} | Sizes: ${swapSizesHtml}</div>` : '';
+                    
+                    piecesHtml += `
+                        <div class="piece-details mb-2">
+                            <strong>${escapeHtml(piece.productName)}</strong> (${escapeHtml(piece.category)})<br>
+                            <small class="text-muted">SKU: ${escapeHtml(piece.sku)}</small><br>
+                            <small class="text-muted">Color: ${piece.color ? escapeHtml(piece.color) : 'N/A'}</small><br>
+                            Available: ${sizesHtml} <br>
+                            ${etaText ? `<span class="eta-highlight">ETA: ${etaText}</span><br>` : ''}
+                            ${notesText ? `<span class="notes-highlight">Notes: ${notesText}</span><br>` : ''}
+                            ${swapHtml}
+                        </div>`;
+                });
+
+                if (!outfit.isActive) {
+                    overallOutfitStatus = 'OOS'; 
+                } else if (hasOOSPiece && !hasAvailablePiece) { 
+                    overallOutfitStatus = 'OOS';
+                } else if (hasOOSPiece || reliesOnSwap) { 
+                    overallOutfitStatus = 'Partial-OOS';
+                } else if (!hasAvailablePiece && !reliesOnSwap && outfit.pieces.length > 0) { 
+                    overallOutfitStatus = 'OOS';
+                }
+            } else { 
+                overallOutfitStatus = outfit.isActive ? 'Unknown' : 'OOS'; 
+            }
+
+            let imageHtml;
+            const fileId = outfit.imageUrl;
+            const uniqueIdPart = outfit.name.replace(/[^a-zA-Z0-9]/g, "") + Math.random().toString(36).substring(2, 9);
+            const imageTagId = `inv-img-${uniqueIdPart}`;
+            const placeholderTagId = `inv-ph-${uniqueIdPart}`;
+
+            if (fileId) {
+                imageHtml = `<img src="#" id="${imageTagId}" class="inventory-card-img" alt="${escapeHtml(outfit.name)}" style="display:none;" /> <div id="${placeholderTagId}" class="inventory-card-img-placeholder">[Loading Image...]</div>`;
+                google.script.run
+                    .withSuccessHandler((imgData) => {
+                        const imgTag = document.getElementById(imageTagId); const phTag = document.getElementById(placeholderTagId);
+                        if(imgData && imgData.base64){ if(imgTag){imgTag.src=`data:${imgData.mimeType};base64,${imgData.base64}`; imgTag.style.display='block'; if(phTag)phTag.style.display='none'; imgTag.onerror = function(){if(phTag){phTag.innerHTML='[Img Load Err]'; phTag.style.display='flex';} imgTag.style.display='none';};}}
+                        else{if(phTag){phTag.innerHTML='[No Img Data]'; phTag.style.display='flex'; if(imgTag)imgTag.style.display='none';}}
+                    })
+                    .withFailureHandler((err) => {
+                         const phTag = document.getElementById(placeholderTagId); const imgTag = document.getElementById(imageTagId);
+                         if(phTag){phTag.innerHTML='[Img Fetch Err]'; phTag.style.display='flex'; if(imgTag)imgTag.style.display='none';} console.error("Img fetch err:", err);
+                    })
+                    .getImageData(fileId);
+            } else {
+                imageHtml = `<div id="${placeholderTagId}" class="inventory-card-img-placeholder">[No Image Available]</div>`;
+            }
+
+            const outfitStatusBadgeClass = 'stock-' + overallOutfitStatus.replace(/\s+/g, '-').toLowerCase();
+            const outfitStatusText = !outfit.isActive ? 'Inactive (OOS)' : overallOutfitStatus;
+            const outfitStatusBadge = `<span class="stock-status-badge ${outfitStatusBadgeClass} float-right">${escapeHtml(outfitStatusText)}</span>`;
+            
+            let actionButtonsHtml = '';
+            if (isCurrentUserAuthorized) {
+                const editButtonClass = outfit.isActive ? 'btn-outline-secondary' : 'btn-outline-warning'; 
+                actionButtonsHtml += `<button class="btn btn-sm ${editButtonClass} btn-edit-stock mr-1" data-outfit-name="${escapeHtml(outfit.name)}" title="Edit Stock/Image/Status"><i class="fas fa-pencil-alt"></i> Edit</button>`;
+                actionButtonsHtml += `<button class="btn btn-sm btn-outline-danger mt-1 btn-delete-outfit" data-outfit-name="${escapeHtml(outfit.name)}" title="Delete Outfit"><i class="fas fa-trash"></i> Delete</button>`;
+            }
+
+            let quickNoteHtml = '';
+            if (outfit.quickNote) {
+                quickNoteHtml = `<div class="outfit-quick-note-display mt-2">${escapeHtml(outfit.quickNote)}</div>`;
+            }
+
+            const cardStatusClass = !outfit.isActive ? 'border-secondary' : (overallOutfitStatus === 'OOS' ? 'border-danger' : (overallOutfitStatus === 'Partial-OOS' ? 'border-warning' : (overallOutfitStatus === 'Available' ? 'border-success' : 'border-light')));
+
+            const cardHtml = `
+            <div class="col-md-6 col-lg-4 col-xl-3 mb-4">
+              <div class="inventory-card ${cardStatusClass}">
+                <div class="card-image-area"> ${imageHtml} </div>
+                <div class="card-content">
+                  <h5 class="mt-2">${escapeHtml(outfit.name)} ${outfitStatusBadge}</h5>
+                  <h6 class="text-muted small mt-3">Pieces:</h6>
+                  <div class="pieces-container-scroll"> ${piecesHtml} </div>
+                  ${quickNoteHtml}
+                </div>
+                <div class="card-footer-actions"> ${actionButtonsHtml} </div>
+              </div>
+            </div>`;
+            inventoryContent.append(cardHtml);
+        });
+    }
+
+    function loadInventoryForUpdate(collectionName, outfitName) {
+        showLoading(`Loading details for ${escapeHtml(outfitName)}...`);
+        $('#inventoryUpdateOutfitName').text(escapeHtml(outfitName));
+        $('#inventoryUpdatePiecesContainer').html('<p class="text-center my-3"><div class="spinner-border spinner-border-sm"></div> Loading piece details...</p>');
+        $('#inventoryUpdateForm')[0].reset(); 
+        $('#inventoryUpdateModal .selectpicker').selectpicker('destroy'); 
+        
+        if (isCurrentUserAuthorized) { $('#saveInventoryUpdateBtn').show(); } else { $('#saveInventoryUpdateBtn').hide(); }
+
+        $('#inventoryUpdateModal').modal('show');
+        google.script.run.withSuccessHandler(onInventoryUpdateDataLoaded).withFailureHandler(onFailure).getInventoryForOutfitUpdate(collectionName, outfitName);
+    }
+
+    function onInventoryUpdateDataLoaded(outfitData) {
+        hideLoading();
+        if (!outfitData) { displayMessage('Error loading outfit details for update.', 'danger'); $('#inventoryUpdatePiecesContainer').html('<p class="text-danger">Load failed.</p>'); return; }
+
+        $('#inventoryUpdateCollectionName').val(currentCollectionName);
+        $('#inventoryUpdateOutfitNameHidden').val(outfitData.name);
+        $('#updateOutfitImage').val(''); 
+        $('#updateOutfitIsActive').prop('checked', outfitData.isActive).data('original-active-state', outfitData.isActive);
+        $('#updateOutfitQuickNote').val(outfitData.quickNote || '');
+        $('#updateOutfitQuickNote').data('original-quick-note', outfitData.quickNote || '');
+
+
+        const container = $('#inventoryUpdatePiecesContainer'); container.empty();
+        (outfitData.pieces || []).forEach((p, i) => {
+            if (!p.rowIndex) { console.warn("Skipping piece with no rowIndex:", p); return; } 
+            const pieceIndexHtml = `piece_update_${i}`; 
+            const pieceIndexForm = i; 
+            const catUpper = (p.category || '').toUpperCase();
+            const sizesForCategory = getSizesForCategory(p.category);
+            const isYesNoCategory = catUpper === 'ACCESSORY' || catUpper === 'HAT';
+
+            let sizeSelectorHtml = '';
+            if (isYesNoCategory) {
+                sizeSelectorHtml = `<select id="s_${pieceIndexHtml}" name="pieces[${pieceIndexForm}][availableSizes]" class="form-control form-control-sm">`;
+                (sizesForCategory || ["Yes", "No"]).forEach(s => { 
+                    const selected = (p.availableSizes && p.availableSizes.length > 0 && p.availableSizes[0] === s) ? 'selected' : '';
+                    sizeSelectorHtml += `<option value="${escapeHtml(s)}" ${selected}>${escapeHtml(s)}</option>`;
+                 });
+                sizeSelectorHtml += `</select>`;
+            } else {
+                 sizeSelectorHtml = `<select id="s_${pieceIndexHtml}" name="pieces[${pieceIndexForm}][availableSizes]" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Sizes...">`;
+                 sizesForCategory.forEach(s => { sizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+                 sizeSelectorHtml += `</select>`;
+            }
+
+            let swapSizeSelectorHtml = `<select id="sw_${pieceIndexHtml}" name="pieces[${pieceIndexForm}][swapAvailableSizes]" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Swap Sizes...">`;
+            (allSizeOptions.standard || []).forEach(s => { swapSizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+            swapSizeSelectorHtml += `</select>`;
+
+            const pHtml = `
+               <div class="piece-update-item border p-3 mb-3 bg-light rounded" data-piece-index="${pieceIndexForm}" id="item_update_${pieceIndexHtml}">
+                  <input type="hidden" name="pieces[${pieceIndexForm}][rowIndex]" value="${p.rowIndex}">
+                  <h6><i class="fas fa-tshirt mr-2"></i> ${escapeHtml(p.productName)} <small>(${escapeHtml(p.category)})</small></h6>
+                  <div class="form-row">
+                     <div class="form-group col-md-6"><label>SKU</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][sku]" value="${escapeHtml(p.sku||'')}"></div>
+                     <div class="form-group col-md-6"><label>Color</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][color]" value="${escapeHtml(p.color||'')}"></div>
+                  </div>
+                  <div class="form-row">
+                      <div class="form-group col-md-6"><label>Available</label><div id="size_selector_container_update_${pieceIndexHtml}">${sizeSelectorHtml}</div></div>
+                      <div class="form-group col-md-3"><label>ETA</label><input type="date" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][eta]" value="${escapeHtml(p.eta||'')}"></div>
+                      <div class="form-group col-md-3"><label>Notes</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][notes]" value="${escapeHtml(p.notes||'')}"></div>
+                  </div>
+                  <div class="form-row">
+                     <div class="form-group col-md-6"><label>Swap SKU</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][swapSku]" value="${escapeHtml(p.swapSku||'')}"></div>
+                     <div class="form-group col-md-6"><label>Swap Sizes</label><div id="swap_size_selector_container_update_${pieceIndexHtml}">${swapSizeSelectorHtml}</div></div>
+                  </div>
+               </div>`;
+            container.append(pHtml);
+
+            if (!isYesNoCategory) {
+                 $(`#s_${pieceIndexHtml}`).selectpicker('val', p.availableSizes||[]);
+            }
+             $(`#sw_${pieceIndexHtml}`).selectpicker('val', p.swapAvailableSizes||[]);
+        });
+         container.find('.selectpicker').selectpicker('render');
+    }
+
+    async function saveInventoryUpdate() {
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized to save inventory.", "danger", 0); return; }
+        $('#inventoryUpdateSpinner').show(); $('#saveInventoryUpdateBtn').prop('disabled', true); clearMessages();
+
+        const collName = $('#inventoryUpdateCollectionName').val();
+        const outName = $('#inventoryUpdateOutfitNameHidden').val();
+        const newIsActive = $('#updateOutfitIsActive').prop('checked');
+        const originalIsActive = $('#updateOutfitIsActive').data('original-active-state');
+        
+        const newQuickNote = $('#updateOutfitQuickNote').val().trim();
+        const originalQuickNote = $('#updateOutfitQuickNote').data('original-quick-note');
+
+        const pieces = [];
+        let formChanged = newIsActive !== originalIsActive || newQuickNote !== originalQuickNote;
+
+        $('#inventoryUpdateForm .piece-update-item').each(function(){
+            const item = $(this);
+            const i = item.data('piece-index');
+            const availableSizesVal = item.find(`select[name="pieces[${i}][availableSizes]"]`).val();
+            const swapSizesVal = item.find(`select[name="pieces[${i}][swapAvailableSizes]"]`).val();
+
+            const pieceData = {
+                rowIndex: item.find(`input[name="pieces[${i}][rowIndex]"]`).val(),
+                sku: item.find(`input[name="pieces[${i}][sku]"]`).val().trim(),
+                color: item.find(`input[name="pieces[${i}][color]"]`).val().trim(),
+                eta: item.find(`input[name="pieces[${i}][eta]"]`).val(),
+                notes: item.find(`input[name="pieces[${i}][notes]"]`).val().trim(),
+                swapSku: item.find(`input[name="pieces[${i}][swapSku]"]`).val().trim(),
+                availableSizes: Array.isArray(availableSizesVal) ? availableSizesVal : (availableSizesVal ? [availableSizesVal] : []),
+                swapAvailableSizes: Array.isArray(swapSizesVal) ? swapSizesVal : (swapSizesVal ? [swapSizesVal] : [])
+            };
+            pieces.push(pieceData);
+            if (Object.values(pieceData).some(val => {
+                 return Array.isArray(val) ? val.length > 0 : (val !== '' && val !== null && val !== undefined && val.toString() !== pieceData.rowIndex.toString());
+            })) {
+                formChanged = true;
+            }
+        });
+
+        const imgFile = $('#updateOutfitImage')[0].files[0]; let imgData = null;
+        try {
+            imgData = await readFileAsBase64(imgFile);
+            if(imgData) { $('#updateOutfitImage').val(''); formChanged = true; }
+        } catch (e) { displayMessage('Error reading image file.', 'danger', 0); $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false); return; }
+        
+        if (!formChanged && !imgData) {
+             displayMessage('No changes detected to save.', 'info');
+             $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false);
+             $('#inventoryUpdateModal').modal('hide');
+             return;
+        }
+
+        if (!collName || !outName) { displayMessage('Missing collection or outfit name for update.', 'danger', 0); $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false); return; }
+        
+        google.script.run
+            .withSuccessHandler(onInventorySaveSuccess)
+            .withFailureHandler(onInventorySaveFailure)
+            .updateInventoryItems(collName, outName, pieces, imgData, newIsActive, newQuickNote);
+    }
+
+    function onInventorySaveSuccess(result) { $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false); if (result?.success) { $('#inventoryUpdateModal').modal('hide'); displayMessage(result.message || 'Inventory updated!', 'success'); if (currentCollectionName && currentCollectionName !== '_all_active_') loadInventoryData(currentCollectionName); } else { displayMessage(result.message || 'Failed to save inventory changes.', 'danger', 0); } }
+    function onInventorySaveFailure(error) { $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false); onFailure(error); displayMessage('Error saving inventory updates.', 'danger', 0); }
+    function onDeleteOutfitSuccess(result) { hideLoading(); if (result?.success) { displayMessage(result.message || 'Outfit deleted.', 'success'); if (currentCollectionName && currentCollectionName !== '_all_active_') loadInventoryData(currentCollectionName); } else { displayMessage(result.message || 'Failed to delete outfit.', 'danger'); } }
+
+    // --- Add Outfit Modal Functions ---
+    function addPieceRow() {
+        newPieceCounter++; const idx = newPieceCounter;
+        let availableSizeOptionsHtml = (allSizeOptions.standard || []).map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+        let sizeSelectorHtml = `<select id="s_new_${idx}" name="pieces[${idx}][availableSizes]" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Sizes...">${availableSizeOptionsHtml}</select>`;
+        let swapSizeOptionsHtml = availableSizeOptionsHtml; 
+        let swapSizeSelectorHtml = `<select id="sw_new_${idx}" name="pieces[${idx}][swapAvailableSizes]" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Swap Sizes...">${swapSizeOptionsHtml}</select>`;
+        let productCategoryInput = `<input type="text" class="form-control form-control-sm" list="productCategoriesDataList" name="pieces[${idx}][category]" placeholder="Enter or Select Category" onchange="updateSizeOptions('new_${idx}', this.value)">`;
+        
+        const html = `
+          <div class="new-piece-item border p-3 mb-3 bg-light rounded position-relative" data-piece-index="${idx}" id="item_new_${idx}">
+            <button type="button" class="close remove-piece-btn text-danger position-absolute" style="top:10px;right:15px;" title="Remove Piece">&times;</button>
+            <h6>Piece ${idx} Details</h6>
+            <div class="form-row">
+              <div class="form-group col-md-5"><label>Product Name*</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][productName]" required><div class="invalid-feedback">Required.</div></div>
+              <div class="form-group col-md-4"><label>SKU*</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][sku]" required><div class="invalid-feedback">Required.</div></div>
+              <div class="form-group col-md-3"><label>Color</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][color]"></div>
+            </div>
+             <div class="form-row">
+                 <div class="form-group col-md-4"><label>Category</label>${productCategoryInput}</div>
+                 <div class="form-group col-md-5"><label>Available Sizes</label><div id="size_selector_container_new_${idx}">${sizeSelectorHtml}</div></div>
+                 <div class="form-group col-md-3"><label>ETA</label><input type="date" class="form-control form-control-sm" name="pieces[${idx}][eta]"></div>
+             </div>
+            <div class="form-row">
+              <div class="form-group col-md-4"><label>Notes</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][notes]"></div>
+              <div class="form-group col-md-4"><label>Swap SKU</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][swapSku]"></div>
+              <div class="form-group col-md-4"><label>Swap Sizes</label><div id="swap_size_selector_container_new_${idx}">${swapSizeSelectorHtml}</div></div>
+            </div>
+          </div>`;
+        $('#newOutfitPiecesContainer').append(html);
+        $(`#item_new_${idx} .selectpicker`).selectpicker('render');
+        populateProductCategoriesDatalist(); 
+    }
+
+    function populateProductCategoriesDatalist() {
+        const datalist = $('#productCategoriesDataList'); 
+        const baseCategories = new Set(['JACKET/TOP', 'BRA', 'DRESS', 'SOCK', 'ONESIE', 'BOTTOM', 'BOTTOM (IN)', 'ACCESSORY', 'HAT', 'Kids Jacket/Top', 'Kids Bra', 'Kids Bottom', 'Bottom - W/Inseam', 'Bottom (IN) - W/Inseam']);
+        
+        if (productCategories && Object.keys(productCategories).length > 0) {
+            Object.values(productCategories).forEach(cat => baseCategories.add(cat));
+        }
+
+        if (datalist.children().length === 0 || datalist.children().length < baseCategories.size) {
+            datalist.empty();
+            baseCategories.forEach(cat => datalist.append(`<option value="${escapeHtml(cat)}">`));
+        }
+
+         const prodCatDatalistManage = $('#productCategoriesList'); 
+         if (prodCatDatalistManage.children().length === 0 || prodCatDatalistManage.children().length < baseCategories.size ) {
+             prodCatDatalistManage.empty();
+             baseCategories.forEach(cat => prodCatDatalistManage.append(`<option value="${escapeHtml(cat)}">`));
+         }
+    }
+
+    function updateSizeOptions(pieceIdPrefix, category) {
+         const catUpper = (category || '').toUpperCase();
+         const sizeContainer = $(`#size_selector_container_${pieceIdPrefix}`);
+         const swapSizeContainer = $(`#swap_size_selector_container_${pieceIdPrefix}`);
+         if (!sizeContainer.length) { console.warn("Size container not found for", pieceIdPrefix); return; }
+
+         const sizesForCat = getSizesForCategory(category);
+         const isYesNo = catUpper === 'ACCESSORY' || catUpper === 'HAT';
+         
+         const currentSizeSelect = sizeContainer.find('select');
+         const currentSizeVal = currentSizeSelect.val(); 
+         const currentSwapSelect = swapSizeContainer.find('select');
+         const currentSwapVal = currentSwapSelect.val();
+
+         if (currentSizeSelect.hasClass('selectpicker')) currentSizeSelect.selectpicker('destroy');
+         if (currentSwapSelect.hasClass('selectpicker')) currentSwapSelect.selectpicker('destroy');
+
+
+         let newSizeSelectorHtml = '';
+         const selectorId = `s_${pieceIdPrefix}`; 
+         const nameAttr = currentSizeSelect.attr('name'); 
+
+         if (isYesNo) {
+             newSizeSelectorHtml = `<select id="${selectorId}" name="${nameAttr}" class="form-control form-control-sm">`;
+             sizesForCat.forEach(s => { newSizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+             newSizeSelectorHtml += `</select>`;
+         } else {
+             newSizeSelectorHtml = `<select id="${selectorId}" name="${nameAttr}" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Sizes...">`;
+             sizesForCat.forEach(s => { newSizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+             newSizeSelectorHtml += `</select>`;
+         }
+         sizeContainer.html(newSizeSelectorHtml); 
+
+         if (!isYesNo) {
+              $(`#${selectorId}`).selectpicker('render');
+               if(Array.isArray(currentSizeVal)) $(`#${selectorId}`).selectpicker('val', currentSizeVal.filter(v => sizesForCat.includes(v)));
+               else if (currentSizeVal && sizesForCat.includes(currentSizeVal)) $(`#${selectorId}`).selectpicker('val', [currentSizeVal]);
+         } else {
+              if(currentSizeVal && !Array.isArray(currentSizeVal) && sizesForCat.includes(currentSizeVal)) $(`#${selectorId}`).val(currentSizeVal);
+              else $(`#${selectorId}`).val(sizesForCat[0] || ''); 
+         }
+
+         const swapSelectorId = `sw_${pieceIdPrefix}`;
+         const swapNameAttr = currentSwapSelect.attr('name'); 
+         let newSwapSizeSelectorHtml = `<select id="${swapSelectorId}" name="${swapNameAttr}" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Swap Sizes...">`;
+         (allSizeOptions.standard || []).forEach(s => { newSwapSizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+         newSwapSizeSelectorHtml += `</select>`;
+         swapSizeContainer.html(newSwapSizeSelectorHtml);
+         $(`#${swapSelectorId}`).selectpicker('render');
+         if(Array.isArray(currentSwapVal)) $(`#${swapSelectorId}`).selectpicker('val', currentSwapVal.filter(v => (allSizeOptions.standard || []).includes(v) ));
+    }
+
+     function getSizesForCategory(cat) {
+         const c = (cat || '').toUpperCase();
+         if (c === 'SOCK') return allSizeOptions.sock || [];
+         if (c === 'ACCESSORY' || c === 'HAT') return allSizeOptions.accessoryHat || ["Yes", "No"]; 
+         if (c === 'BOTTOM (IN)') return allSizeOptions.waist || [];
+         if (c === 'KIDS JACKET/TOP' || c === 'KIDS BRA' || c === 'KIDS BOTTOM') return allSizeOptions.kids || [];
+         if (c === 'BOTTOM - W/INSEAM') return allSizeOptions.bottomWInseam || [];
+         if (c === 'BOTTOM (IN) - W/INSEAM') return allSizeOptions.bottomInWInseam || [];
+         return allSizeOptions.standard || []; 
+     }
+
+    async function saveNewOutfit() {
+         if (!isCurrentUserAuthorized) { displayMessage("Not authorized.", "danger", 0); return; }
+         $('#addOutfitSpinner').show(); $('#saveNewOutfitBtn').prop('disabled', true); clearMessages();
+         const form = $('#addOutfitForm')[0];
+         let allPiecesValid = true;
+
+         $('#newOutfitPiecesContainer .new-piece-item').each(function() {
+            const item = $(this);
+            const productNameInput = item.find('input[name$="[productName]"]');
+            const skuInput = item.find('input[name$="[sku]"]');
+            if (!productNameInput.val().trim()) { productNameInput.addClass('is-invalid'); allPiecesValid = false;} else {productNameInput.removeClass('is-invalid');}
+            if (!skuInput.val().trim()) { skuInput.addClass('is-invalid'); allPiecesValid = false;} else {skuInput.removeClass('is-invalid');}
+         });
+
+         if (!form.checkValidity() || !allPiecesValid) {
+             form.classList.add('was-validated'); 
+             displayMessage('Please fill all required fields (*), including Product Name and SKU for each piece.', 'warning', 0);
+             $('#addOutfitSpinner').hide(); $('#saveNewOutfitBtn').prop('disabled', false); return;
+         }
+         form.classList.remove('was-validated'); 
+
+         const collName = $('#addOutfitCollectionHidden').val();
+         const outName = $('#newOutfitName').val().trim();
+         const isActive = true; 
+         const pieces = [];
+
+         $('#newOutfitPiecesContainer .new-piece-item').each(function() {
+              const item = $(this);
+              const i = item.data('piece-index'); 
+              const availableSizesVal = item.find(`select[name="pieces[${i}][availableSizes]"]`).val();
+              const swapSizesVal = item.find(`select[name="pieces[${i}][swapAvailableSizes]"]`).val();
+              const pieceData = {
+                  productName: item.find(`input[name="pieces[${i}][productName]"]`).val().trim(),
+                  sku: item.find(`input[name="pieces[${i}][sku]"]`).val().trim(),
+                  category: item.find(`input[name="pieces[${i}][category]"]`).val().trim(),
+                  color: item.find(`input[name="pieces[${i}][color]"]`).val().trim(),
+                  eta: item.find(`input[name="pieces[${i}][eta]"]`).val(),
+                  notes: item.find(`input[name="pieces[${i}][notes]"]`).val().trim(),
+                  swapSku: item.find(`input[name="pieces[${i}][swapSku]"]`).val().trim(),
+                  availableSizes: Array.isArray(availableSizesVal) ? availableSizesVal : (availableSizesVal ? [availableSizesVal] : []),
+                  swapAvailableSizes: Array.isArray(swapSizesVal) ? swapSizesVal : (swapSizesVal ? [swapSizesVal] : [])
+              };
+              pieces.push(pieceData);
+         });
+
+         if (pieces.length === 0) {
+             displayMessage('Please add at least one valid piece to the outfit.', 'warning', 0);
+             $('#addOutfitSpinner').hide(); $('#saveNewOutfitBtn').prop('disabled', false); return;
+         }
+
+         const imgFile = $('#newOutfitImage')[0].files[0]; let imgData = null;
+         try {
+             imgData = await readFileAsBase64(imgFile); 
+             if(imgData) $('#newOutfitImage').val(''); 
+         }
+         catch (e) { displayMessage('Error reading image file.', 'danger', 0); $('#addOutfitSpinner').hide(); $('#saveNewOutfitBtn').prop('disabled', false); return; }
+
+         const outfitData = { collectionName: collName, outfitName: outName, isActive: isActive, imageData: imgData, pieces: pieces };
+         google.script.run.withSuccessHandler(onNewOutfitSaveSuccess).withFailureHandler(onNewOutfitSaveFailure).addNewOutfit(outfitData);
+     }
+
+    function onNewOutfitSaveSuccess(result) { $('#addOutfitSpinner').hide(); $('#saveNewOutfitBtn').prop('disabled', false); if (result?.success) { $('#addOutfitModal').modal('hide'); displayMessage(result.message || 'Outfit added successfully!', 'success'); if (currentCollectionName && currentCollectionName !== '_all_active_') loadInventoryData(currentCollectionName); } else { displayMessage(result.message || 'Failed to add outfit.', 'danger', 0); $('#addOutfitForm').removeClass('was-validated'); } }
+    function onNewOutfitSaveFailure(error) { $('#addOutfitSpinner').hide(); $('#saveNewOutfitBtn').prop('disabled', false); onFailure(error); displayMessage('Error adding new outfit. See console/logs.', 'danger', 0); $('#addOutfitForm').removeClass('was-validated'); }
+
+    // --- Product Management Modal Functions ---
+    function loadAndShowProductsModal() {
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized.", "warning"); return;}
+        showLoading("Loading products...");
+        $('#existingProductsList').html('<p class="text-muted">Loading...</p>');
+        resetProductForm(); 
+        populateProductCategoriesDatalist(); 
+        $('#manageProductsModal').modal('show');
+        google.script.run.withSuccessHandler(populateProductsModal).withFailureHandler(onFailure).getProductsList();
+    }
+
+    function populateProductsModal(products) {
+        hideLoading();
+        const listContainer = $('#existingProductsList'); listContainer.empty();
+        if (!products || products.length === 0) { listContainer.append('<p class="text-muted">No products defined yet.</p>'); return; }
+
+        let tableHtml = '<table class="table table-sm table-striped table-hover"><thead><tr><th>Product Name</th><th>Category</th>';
+        if (isCurrentUserAuthorized) {
+            tableHtml += '<th>Actions</th>';
+        }
+        tableHtml += '</tr></thead><tbody>';
+        products.sort((a, b) => a.productName.localeCompare(b.productName)); 
+        products.forEach(p => {
+            tableHtml += `<tr><td>${escapeHtml(p.productName)}</td><td>${escapeHtml(p.category)}</td>`;
+            if (isCurrentUserAuthorized) {
+                tableHtml += `<td class="text-right"><button class="btn btn-xs btn-outline-primary edit-product-btn" data-name="${escapeHtml(p.productName)}" data-category="${escapeHtml(p.category)}"><i class="fas fa-pencil-alt"></i></button></td>`;
+            }
+            tableHtml += `</tr>`;
+        });
+        tableHtml += '</tbody></table>'; listContainer.html(tableHtml);
+        resetProductForm(); 
+    }
+
+    function prepareProductFormForEdit(productName, category) {
+        $('#productFormTitle').text('Edit Product'); $('#editProductOriginalName').val(productName); $('#newProductName').val(productName); $('#newProductCategory').val(category); $('#saveProductBtn').html('<i class="fas fa-save"></i> Save Changes').removeClass('btn-success').addClass('btn-primary'); $('#cancelEditProductBtn').show(); $('#newProductName').focus(); $('#addProductForm').removeClass('was-validated');
+    }
+    function resetProductForm() {
+        $('#productFormTitle').text('Add New Product');
+        $('#addProductForm')[0].reset();
+        $('#editProductOriginalName').val('');
+        $('#saveProductBtn').html('<i class="fas fa-plus"></i> Add Product').removeClass('btn-primary').addClass('btn-success');
+        $('#cancelEditProductBtn').hide();
+        $('#addProductForm').removeClass('was-validated');
+        if (isCurrentUserAuthorized) { $('#addProductForm').show(); } else { $('#addProductForm').hide(); }
+    }
+    function saveProduct() {
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized.", "danger"); return; }
+        const originalName = $('#editProductOriginalName').val().trim();
+        const productName = $('#newProductName').val().trim();
+        const category = $('#newProductCategory').val().trim();
+        const isEditing = !!originalName;
+        const form = $('#addProductForm')[0];
+        if (!form.checkValidity()){ form.classList.add('was-validated'); return; }
+        form.classList.remove('was-validated');
+
+        $('#addProductSpinner').show();
+        const productData = { productName: productName, category: category };
+        if (isEditing) {
+            productData.originalProductName = originalName;
+            google.script.run.withSuccessHandler(onProductSaveSuccess).withFailureHandler(onProductSaveFailure).updateProductCategory(productData);
+        } else {
+            google.script.run.withSuccessHandler(onProductSaveSuccess).withFailureHandler(onProductSaveFailure).addNewProduct(productData);
+        }
+    }
+    function onProductSaveSuccess(result) { $('#addProductSpinner').hide(); if (result && result.success) { displayMessage(result.message, 'success'); resetProductForm(); google.script.run.withSuccessHandler(populateProductsModal).withFailureHandler(onFailure).getProductsList(); google.script.run.withSuccessHandler(cats => {productCategories = cats; populateProductCategoriesDatalist();}).withFailureHandler(onFailure).getProductCategories(); } else { displayMessage(result.message || "Failed to save product.", 'danger'); } }
+    function onProductSaveFailure(error) { $('#addProductSpinner').hide(); onFailure(error); displayMessage("Error saving product. See console/logs.", "danger"); }
+
+    // --- Collection Management Functions ---
+    function loadAndShowCollectionsModal() {
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized.", "warning"); return; }
+        showLoading("Loading collections...");
+        $('#existingCollectionsList').html('<p class="text-muted">Loading...</p>');
+        resetCollectionForm();
+        $('#manageCollectionsModal').modal('show');
+        google.script.run.withSuccessHandler(populateCollectionsModal).withFailureHandler(onFailure).getCollectionsList();
+    }
+
+    function populateCollectionsModal(collections) {
+        hideLoading();
+        allCollectionsForDashboard = collections || []; 
+        const listContainer = $('#existingCollectionsList'); listContainer.empty();
+        if (!collections || collections.length === 0) { listContainer.append('<p class="text-muted">No collections defined yet.</p>'); return; }
+
+        let tableHtml = '<table class="table table-sm table-striped table-hover"><thead><tr><th>Name</th><th>Promo Code</th><th>Active</th>';
+        if (isCurrentUserAuthorized) { tableHtml += '<th>Actions</th>'; }
+        tableHtml += '</tr></thead><tbody>';
+        collections.sort((a, b) => a.name.localeCompare(b.name));
+        collections.forEach(c => {
+            const activeBadge = c.isActive ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-secondary">No</span>';
+            tableHtml += `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.promoCode || '-')}</td><td>${activeBadge}</td>`;
+            if (isCurrentUserAuthorized) {
+                let actionsHtml = `<button class="btn btn-xs btn-outline-primary edit-collection-btn mr-1" data-name="${escapeHtml(c.name)}" data-promo="${escapeHtml(c.promoCode || '')}" data-active="${c.isActive}"><i class="fas fa-pencil-alt"></i> Edit</button>`;
+                if (!c.isActive) { 
+                    actionsHtml += `<button class="btn btn-xs btn-outline-warning archive-collection-btn" data-name="${escapeHtml(c.name)}"><i class="fas fa-archive"></i> Archive</button>`;
+                }
+                tableHtml += `<td class="text-right">${actionsHtml}</td>`;
+            }
+            tableHtml += `</tr>`;
+        });
+        tableHtml += '</tbody></table>'; listContainer.html(tableHtml);
+        resetCollectionForm();
+    }
+
+    function prepareCollectionFormForEdit(name, promo, active) {
+        $('#collectionFormTitle').text('Edit Collection'); $('#editCollectionOriginalName').val(name); $('#collectionNameInput').val(name); $('#collectionPromoCodeInput').val(promo); $('#collectionIsActiveInput').prop('checked', active); $('#saveCollectionBtn').html('<i class="fas fa-save"></i> Save Changes').removeClass('btn-success').addClass('btn-primary'); $('#cancelEditCollectionBtn').show(); $('#collectionNameInput').focus(); $('#addEditCollectionForm').removeClass('was-validated');
+    }
+    function resetCollectionForm() {
+        $('#collectionFormTitle').text('Add New Collection');
+        $('#addEditCollectionForm')[0].reset();
+        $('#editCollectionOriginalName').val('');
+        $('#saveCollectionBtn').html('<i class="fas fa-plus"></i> Add Collection').removeClass('btn-primary').addClass('btn-success');
+        $('#cancelEditCollectionBtn').hide();
+        $('#addEditCollectionForm').removeClass('was-validated');
+        if (isCurrentUserAuthorized) { $('#addEditCollectionForm').show(); } else { $('#addEditCollectionForm').hide(); }
+    }
+    function saveCollection() {
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized.", "danger"); return; }
+        const form = $('#addEditCollectionForm')[0];
+        if (!form.checkValidity()) { form.classList.add('was-validated'); displayMessage('Collection Name is required.', 'warning'); return; }
+        form.classList.remove('was-validated');
+
+        const originalName = $('#editCollectionOriginalName').val().trim();
+        const name = $('#collectionNameInput').val().trim();
+        const promoCode = $('#collectionPromoCodeInput').val().trim();
+        const isActive = $('#collectionIsActiveInput').is(':checked');
+        const isEditing = !!originalName;
+        const collectionData = { name: name, promoCode: promoCode, isActive: isActive };
+
+        $('#saveCollectionSpinner').show();
+        if (isEditing) {
+            collectionData.originalName = originalName;
+            google.script.run.withSuccessHandler(onCollectionSaveSuccess).withFailureHandler(onCollectionSaveFailure).updateCollection(collectionData);
+        } else {
+            google.script.run.withSuccessHandler(onCollectionSaveSuccess).withFailureHandler(onCollectionSaveFailure).addNewCollection(collectionData);
+        }
+    }
+    function onCollectionSaveSuccess(result) {
+        $('#saveCollectionSpinner').hide();
+        if (result && result.success) {
+            displayMessage(result.message, 'success');
+            resetCollectionForm();
+            google.script.run.withSuccessHandler(populateCollectionsModal).withFailureHandler(onFailure).getCollectionsList();
+            google.script.run.withSuccessHandler(collections => {
+                 activeCollections = collections;
+                 populateCollectionSelector();
+                 if (currentCollectionName && currentCollectionName !== '_all_active_') {
+                    const stillExists = activeCollections.find(c => c.name === currentCollectionName);
+                    if (!stillExists) {
+                         $('#collectionSelect').val('_all_active_').trigger('change');
+                    }
+                 } else {
+                     $('#collectionSelect').val('_all_active_').trigger('change');
+                 }
+            }).withFailureHandler(onFailure).getActiveCollections();
+        } else { displayMessage(result.message || "Failed to save collection.", 'danger'); }
+    }
+    function onCollectionSaveFailure(error) { $('#saveCollectionSpinner').hide(); onFailure(error); displayMessage("Error saving collection. See console/logs.", "danger"); }
+
+    function onArchiveCollectionSuccess(result) {
+        hideLoading();
+        if (result && result.success) {
+            displayMessage(result.message, 'success', 7000);
+            google.script.run.withSuccessHandler(populateCollectionsModal).withFailureHandler(onFailure).getCollectionsList();
+            google.script.run.withSuccessHandler(collections => {
+                activeCollections = collections; 
+                const previouslySelected = currentCollectionName;
+                populateCollectionSelector(); 
+
+                if (previouslySelected === result.archivedCollectionName || !activeCollections.find(c => c.name === previouslySelected)) {
+                     $('#collectionSelect').val('_all_active_').trigger('change');
+                } else {
+                    $('#collectionSelect').val(previouslySelected); 
+                }
+            }).withFailureHandler(onFailure).getActiveCollections();
+        } else { displayMessage(result.message || "Failed to archive collection.", 'danger'); }
+    }
+    function onArchiveCollectionFailure(error) { hideLoading(); onFailure(error); displayMessage(`Error during archiving: ${error.message || 'Unknown error.'}`, 'danger'); }
+
+  // --- CSV, Raw Data, and General Failure ---
+  function onRawDataUploaded(result) { hideLoading(); resetFileInput(); if (result && result.success) { displayMessage(result.message || "File uploaded. Ready to process.", "success", 8000); }  else { displayMessage(result.message || "Failed to upload data.", "danger"); } }
+    function resetFileInput() { $('#rawFileUploadInput').val(null); }
+
+    function downloadCsv() {
+        if (!currentCollectionName || currentCollectionName === '_all_active_') {
+            displayMessage('Please select a specific collection (for Orders) first to download its CSV.', 'warning'); return;
+        }
+        showLoading(`Generating CSV for ${escapeHtml(currentCollectionName)}...`);
+        const filters = getCurrentFilters();
+        google.script.run.withSuccessHandler(onCsvDataReady)
+            .withFailureHandler(onFailure)
+            .generateCsvData(currentCollectionName, filters);
+    }
+
+    function downloadImportCsv() {
+        if (!isCurrentUserAuthorized) { displayMessage("Not authorized for this download.", "warning"); return; }
+        if (!currentCollectionName || currentCollectionName === '_all_active_') {
+            displayMessage('Please select a specific collection (for Orders) first to download its import CSV.', 'warning'); return;
+        }
+        showLoading(`Generating Import CSV for ${escapeHtml(currentCollectionName)}...`);
+        const filters = getCurrentFilters();
+        google.script.run
+            .withSuccessHandler(onCsvDataReady) 
+            .withFailureHandler(onFailure)
+            .generateImportCsvData(currentCollectionName, filters);
+    }
+
+
+    function onCsvDataReady(csvContent) { hideLoading(); if (typeof csvContent !== 'string' || csvContent.startsWith("Error:") || csvContent.startsWith("No data")) { displayMessage(csvContent || "CSV generation failed or no data to export.", 'warning'); return; } try { const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); const url = URL.createObjectURL(blob); link.setAttribute("href", url); const safeName = (currentCollectionName && currentCollectionName !== '_all_active_' ? currentCollectionName : 'export').replace(/[^a-z0-9]/gi, '_').toLowerCase(); const stamp = new Date().toISOString().slice(0,10).replace(/-/g,''); link.setAttribute("download", `orders_export_${safeName}_${stamp}.csv`); link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); displayMessage('CSV download prepared.', 'success'); } catch (e) { console.error("CSV Download error:", e); displayMessage('CSV download failed on client side.', 'danger'); } }
+    function onRawDataProcessed(resultMessage) { hideLoading(); const type = resultMessage.startsWith("Error:") ? 'danger' : 'success'; displayMessage(resultMessage, type, type === 'success' ? 10000 : 0); if (type === 'success' && currentCollectionName && currentCollectionName !== '_all_active_') { currentPage = 1; loadCollectionData(currentCollectionName); } }
+
+  function onFailure(error) {
+     clearEditHighlight();
+     isLoadingOrders = false;
+     hideLoading();
+     $('#modalSpinner, #inventoryUpdateSpinner, #addOutfitSpinner, #addProductSpinner, #saveCollectionSpinner').hide();
+     $('#saveOrderDetailsBtn, #saveInventoryUpdateBtn, #saveNewOutfitBtn, #saveProductBtn, #saveCollectionBtn').prop('disabled', false);
+
+     console.error('Server Script Error:', error);
+     let message = `Error: ${error.message || 'An unknown server error occurred.'}`;
+     if (error.message?.toLowerCase().includes("authorization")) message = "Authorization failed. Please try reloading the application. You may need to re-authorize the script.";
+     else if (error.message?.toLowerCase().includes("limit") || error.message?.toLowerCase().includes("timeout")) message = "The operation timed out or a script limit was exceeded. Please try again later or simplify your request. If the issue persists, contact support.";
+     else if (error.message?.toLowerCase().includes("not found")) message = "Error: A required resource (like a sheet or file) could not be found. Please ensure all backend configurations are correct or contact support.";
+
+     displayMessage(`${message} If the issue persists, check the script execution logs for more details.`, 'danger', 0);
+  }
+</script>
