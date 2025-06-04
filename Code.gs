@@ -885,7 +885,6 @@ function getActiveCollections() {
     }
 }
 
-// <<< NEW FUNCTION to get unique values for '# of Outfits' filter >>>
 function getUniqueOutfitsRawOriginalValues(collectionName) {
   if (!ordersSheet) {
     logError('getUniqueOutfitsRawOriginalValues', 'Orders sheet (Active SS) not found.');
@@ -923,7 +922,6 @@ function getUniqueOutfitsRawOriginalValues(collectionName) {
   }
 }
 
-// <<< NEW FUNCTION to get unique values for 'Unavailable Notes' filter >>>
 function getUniqueUnavailableNotesValues(collectionName) {
   if (!ordersSheet) {
     logError('getUniqueUnavailableNotesValues', 'Orders sheet (Active SS) not found.');
@@ -961,8 +959,6 @@ function getUniqueUnavailableNotesValues(collectionName) {
   }
 }
 
-
-// UPDATED getFilteredOrders function
 function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSize = 100) { 
     if (!ordersSheet) { 
         logError('getFilteredOrders', 'Orders sheet (Active SS) not found.');
@@ -993,14 +989,14 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
             OMS_ID: ORDERS_COL.OMS_ID, PREF1: ORDERS_COL.PREF1, PREF2: ORDERS_COL.PREF2, 
             PREF3: ORDERS_COL.PREF3, PREF4: ORDERS_COL.PREF4, PREF5: ORDERS_COL.PREF5, 
             ORDER_ISSUE: ORDERS_COL.ORDER_ISSUE,
-            OUTFITS_RAW_ORIGINAL: ORDERS_COL.OUTFITS_RAW_ORIGINAL, // <<< MODIFIED
-            UNAVAILABLE_NOTES: ORDERS_COL.UNAVAILABLE_NOTES     // <<< MODIFIED
+            OUTFITS_RAW_ORIGINAL: ORDERS_COL.OUTFITS_RAW_ORIGINAL, 
+            UNAVAILABLE_NOTES: ORDERS_COL.UNAVAILABLE_NOTES     
         }; 
         for (const key in requiredCols) { 
             const colIndexOneBased = requiredCols[key]; 
             if (!colIndexOneBased) throw new Error(`Column index for '${key}' not defined in ORDERS_COL.`); 
             indices[key] = colIndexOneBased - 1; 
-             if (indices[key] >= headers.length || !headers[indices[key]]) { // Check if header exists at expected index
+             if (indices[key] >= headers.length || !headers[indices[key]]) { 
                  throw new Error(`Header for '${key}' (column ${colIndexOneBased}, expected: '${headers[colIndexOneBased-1]}') is out of bounds or missing. Sheet has ${headers.length} columns.`); 
             }
         }
@@ -1033,8 +1029,8 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
         const ownerFilterLower = filters.owner?.toString().toLowerCase().trim(); 
         const nameFilterLower = filters.nameSearch?.toString().toLowerCase().trim(); 
         const orderIssueFilter = filters.orderIssue?.toString().trim();
-        const outfitsRawFilter = filters.outfitsRawOriginal?.toString().trim();       // <<< MODIFIED
-        const unavailableNotesFilter = filters.unavailableNotes?.toString().trim(); // <<< MODIFIED
+        const outfitsRawFilter = filters.outfitsRawOriginal?.toString().trim();       
+        const unavailableNotesFilter = filters.unavailableNotes?.toString().trim(); 
         const missingLastNameFilter = filters.missingLastName === true; 
 
         const allValidRows = data.slice(1).filter(row => { 
@@ -1054,7 +1050,6 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                 return false;
             }
 
-            // <<< MODIFIED FILTER LOGIC START >>>
             if (outfitsRawFilter && indices.OUTFITS_RAW_ORIGINAL !== undefined &&
                 (row[indices.OUTFITS_RAW_ORIGINAL]?.toString().trim() !== outfitsRawFilter) ) {
                 return false;
@@ -1063,7 +1058,6 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                 (row[indices.UNAVAILABLE_NOTES]?.toString().trim() !== unavailableNotesFilter) ) {
                 return false;
             }
-            // <<< MODIFIED FILTER LOGIC END >>>
 
             if (missingLastNameFilter) 
             { 
@@ -2303,6 +2297,97 @@ function getProductsList() {
   } catch (e) { logError('getProductsList', `Error reading Active SS Products: ${e.message}`, e.stack); return [];
   } 
 }
+
+// <<< NEW FUNCTION for batch adding products >>>
+function batchAddProductsFromUpload(fileContentString) {
+  if (!isUserAuthorizedForProcessing()) {
+    logActivity("PRODUCT_BATCH_ADD_DENIED", "Unauthorized attempt to batch add products.");
+    return { success: false, message: "Error: Not authorized." };
+  }
+  if (!productsSheet) {
+    logError('batchAddProductsFromUpload', 'Products sheet (Active SS) not found.');
+    return { success: false, message: "Products sheet (Active SS) not found." };
+  }
+
+  let newProductsAddedCount = 0;
+  let duplicatesIgnoredCount = 0;
+  let productsToActuallyAdd = [];
+
+  try {
+    const existingProductsData = getProductsList(); 
+    const existingProductNamesLower = new Set(existingProductsData.map(p => p.productName.toLowerCase()));
+
+    const uploadedRows = Utilities.parseCsv(fileContentString);
+    if (!uploadedRows || uploadedRows.length === 0) {
+      return { success: true, message: "Uploaded file was empty or could not be parsed." };
+    }
+
+    const potentialHeader = uploadedRows[0][0] ? uploadedRows[0][0].toString().toLowerCase() : "";
+    let dataRows = uploadedRows;
+    if (potentialHeader.includes("product") || potentialHeader.includes("name") || potentialHeader.includes("category")) {
+        if (uploadedRows.length > 1) {
+            dataRows = uploadedRows.slice(1);
+            Logger.log("Batch Add Products: Detected and skipped header row in uploaded file.");
+        } else {
+            return { success: true, message: "Uploaded file contained only a header row or was empty." };
+        }
+    }
+    
+    if (dataRows.length === 0) {
+      return { success: true, message: "No data rows found in uploaded file after header check." };
+    }
+
+    const productsSheetHeaders = productsSheet.getRange(1, 1, 1, productsSheet.getLastColumn()).getValues()[0];
+    const nameColSheetIdx = productsSheetHeaders.indexOf("ProductName");
+    const catColSheetIdx = productsSheetHeaders.indexOf("Category");
+
+    if (nameColSheetIdx === -1 || catColSheetIdx === -1) {
+        logError('batchAddProductsFromUpload', 'ProductName or Category column not found in Products Sheet.');
+        return { success: false, message: "Products sheet is missing required columns (ProductName, Category)." };
+    }
+
+    dataRows.forEach(row => {
+      const productName = row[0] ? String(row[0]).trim() : "";
+      const category = (row.length > 1 && row[1]) ? String(row[1]).trim() : ""; 
+
+      if (productName) {
+        if (!existingProductNamesLower.has(productName.toLowerCase())) {
+          let newSheetRow = new Array(productsSheetHeaders.length).fill("");
+          newSheetRow[nameColSheetIdx] = productName;
+          newSheetRow[catColSheetIdx] = category; 
+          
+          productsToActuallyAdd.push(newSheetRow);
+          existingProductNamesLower.add(productName.toLowerCase()); 
+        } else {
+          duplicatesIgnoredCount++;
+        }
+      }
+    });
+
+    if (productsToActuallyAdd.length > 0) {
+      productsSheet.getRange(productsSheet.getLastRow() + 1, 1, productsToActuallyAdd.length, productsSheetHeaders.length)
+                   .setValues(productsToActuallyAdd);
+      newProductsAddedCount = productsToActuallyAdd.length;
+      SpreadsheetApp.flush();
+      scriptCache.remove('productCategories_activeSS'); 
+      Logger.log(`Batch Add Products: Added ${newProductsAddedCount} new products. Ignored ${duplicatesIgnoredCount} duplicates.`);
+      logActivity("PRODUCT_BATCH_ADD_SUCCESS", `Added ${newProductsAddedCount} products. Ignored ${duplicatesIgnoredCount} duplicates.`);
+    } else {
+       Logger.log(`Batch Add Products: No new products to add. Ignored ${duplicatesIgnoredCount} duplicates.`);
+    }
+
+    return { 
+      success: true, 
+      message: `${newProductsAddedCount} new product(s) added. ${duplicatesIgnoredCount} duplicate(s) ignored.` 
+    };
+
+  } catch (e) {
+    logError('batchAddProductsFromUpload', `Error processing uploaded product list: ${e.message}`, e.stack);
+    logActivity("PRODUCT_BATCH_ADD_ERROR", `Error processing product list: ${e.message}`);
+    return { success: false, message: `Error processing file: ${e.message}` };
+  }
+}
+
 
 function addNewProduct(productData) { 
   if (!isUserAuthorizedForProcessing()) { 
