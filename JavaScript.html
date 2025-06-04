@@ -52,7 +52,6 @@
         return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
    }
 
-   // <<< NEW UTILITY FUNCTION >>>
    function unescapeHtml(safe) {
         if (safe === null || typeof safe === 'undefined') return '';
         return safe.toString()
@@ -109,9 +108,9 @@
     populateProductCategoriesDatalist(); 
 
     if (isCurrentUserAuthorized) {
-        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').show();
+        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #uploadProductListBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').show(); // Added #uploadProductListBtn
     } else {
-        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').hide();
+        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #uploadProductListBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').hide(); // Added #uploadProductListBtn
     }
 
     google.script.run.withSuccessHandler(function(allCollectionsForMetrics) {
@@ -174,7 +173,7 @@
       select.append($('<option>', { value: "", text: "-- All --" }));
       if (outfitsRawOriginalOptions && outfitsRawOriginalOptions.length > 0) {
           outfitsRawOriginalOptions.forEach(val => {
-              select.append($('<option>', { value: val, text: val })); // MODIFIED: Use raw val for text
+              select.append($('<option>', { value: val, text: val })); 
           });
       }
       select.prop('disabled', !(outfitsRawOriginalOptions && outfitsRawOriginalOptions.length > 0) || (currentCollectionName === '_all_active_') || !currentCollectionName);
@@ -186,7 +185,7 @@
       select.append($('<option>', { value: "", text: "-- All --" }));
       if (unavailableNotesOptions && unavailableNotesOptions.length > 0) {
           unavailableNotesOptions.forEach(val => {
-              select.append($('<option>', { value: val, text: val })); // MODIFIED: Use raw val for text
+              select.append($('<option>', { value: val, text: val })); 
           });
       }
       select.prop('disabled', !(unavailableNotesOptions && unavailableNotesOptions.length > 0) || (currentCollectionName === '_all_active_') || !currentCollectionName);
@@ -397,7 +396,7 @@
             currentCollectionName = '_all_active_';
             $('#ordersArea, #inventoryArea').hide();
             $('#filtersCard').show(); 
-            $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', true);
+            $('#filterOwnerSelect, #filterName, #filterEmail, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate, #stockFilterButtonGroup, #filterMissingLastNameBtn').prop('disabled', true); 
             $('#applyFiltersBtn, #clearFiltersBtn').prop('disabled', true);
 
 
@@ -497,6 +496,49 @@
       $('#uploadRawDataBtn').off('click').on('click', function() { if (isCurrentUserAuthorized) $('#rawFileUploadInput').click(); else displayMessage("Not authorized.", "warning"); });
       $('#rawFileUploadInput').off('change').on('change', handleRawFileUpload);
 
+      // <<< NEW: Event listener for Upload Product List button >>>
+      $('#uploadProductListBtn').off('click').on('click', function() {
+          if (isCurrentUserAuthorized) {
+              $('#productListUploadInput').click(); // Trigger hidden file input
+          } else {
+              displayMessage("Not authorized to upload product lists.", "warning");
+          }
+      });
+
+      // <<< NEW: Event listener for the product list file input change >>>
+      $('#productListUploadInput').off('change').on('change', function(event) {
+          const file = event.target.files[0];
+          if (!file) {
+              return;
+          }
+          if (!/\.(csv|txt)$/i.test(file.name)) { 
+               displayMessage("Invalid file type. Please upload a CSV or TXT file.", "warning");
+               resetProductListFileInput(); 
+               return;
+          }
+          if (!isCurrentUserAuthorized) { 
+              displayMessage("Not authorized to upload data.", "warning"); 
+              resetProductListFileInput();
+              return; 
+          }
+
+          showLoading(`Uploading and processing ${escapeHtml(file.name)}...`);
+          const reader = new FileReader();
+          reader.onload = function(e) {
+              google.script.run
+                  .withSuccessHandler(onProductListUploaded)
+                  .withFailureHandler(onFailure) 
+                  .batchAddProductsFromUpload(e.target.result);
+          };
+          reader.onerror = function(e) { 
+              hideLoading();
+              onFailure({ message: "Error reading product list file." });
+              resetProductListFileInput();
+          };
+          reader.readAsText(file); 
+      });
+
+
       $('#viewInventoryBtn').off('click').on('click', function() {
         handleViewInventoryClick();
       });
@@ -535,6 +577,23 @@
       $('#addProductForm').off('submit').on('submit', function(e){ e.preventDefault(); saveProduct(); });
       $('#existingProductsList').off('click', '.edit-product-btn').on('click', '.edit-product-btn', function() { prepareProductFormForEdit($(this).data('name'), $(this).data('category')); });
       $('#cancelEditProductBtn').off('click').on('click', resetProductForm);
+      
+      $('#manageProductsModal').on('shown.bs.modal', function () {
+          $('#productSearchInput').val('').trigger('keyup'); 
+          $('#newProductName').focus(); 
+      });
+      $('#productSearchInput').off('keyup').on('keyup', function() { 
+          const searchTerm = $(this).val().toLowerCase();
+          $('#existingProductsList table tbody tr').each(function() {
+              const productName = $(this).find('td:first').text().toLowerCase(); 
+              if (productName.includes(searchTerm)) {
+                  $(this).show();
+              } else {
+                  $(this).hide();
+              }
+          });
+      });
+
 
       $('#manageCollectionsBtn').off('click').on('click', loadAndShowCollectionsModal);
       $('#addEditCollectionForm').off('submit').on('submit', function(e){ e.preventDefault(); saveCollection(); });
@@ -560,6 +619,11 @@
   }
 
   // --- Event Handler Functions ---
+  // ... (handleEditOrderClick, clearEditHighlight, etc. - all existing functions from here on) ...
+  // ... The rest of your JavaScript functions remain the same as the previously provided complete version ...
+  // ... Ensure all functions like onOrderDetailsLoaded, saveOrderDetails, inventory functions,
+  // product/collection management, CSV, Raw Data, onFailure are included below.
+  
   function handleEditOrderClick($button) {
       clearMessages();
       const orderId = $button.data('order-id');
@@ -927,7 +991,6 @@
             highlightParts.push(`<strong>INSEAM:</strong> ${escapeHtml(inseamForHighlight)}`);
         }
         if (outfitsRawForHighlight) {
-            // MODIFIED for highlight display
             highlightParts.push(`<strong># Outfits:</strong> ${escapeHtml(unescapeHtml(outfitsRawForHighlight))}`);
         }
         if (generalNotesForHighlight) {
@@ -937,9 +1000,9 @@
             }
             highlightParts.push(`<strong>General Notes:</strong> ${escapeHtml(unescapeHtml(generalNotesSnippet))}`);
         }
-         if (unavailableNotesForHighlight) { // For modal highlights consistency
+         if (unavailableNotesForHighlight) { 
             let unavailableNotesSnippet = unavailableNotesForHighlight;
-            if (unavailableNotesSnippet.length > 70) { // Shorter snippet for this one
+            if (unavailableNotesSnippet.length > 70) { 
                 unavailableNotesSnippet = unavailableNotesSnippet.substring(0, 67) + "...";
             }
             highlightParts.push(`<strong>Unavailable:</strong> ${escapeHtml(unescapeHtml(unavailableNotesSnippet))}`);
@@ -995,12 +1058,12 @@
         });
 
         const numOutfitsTextarea = $('#modalNumOutfits');
-        numOutfitsTextarea.val(unescapeHtml(outfitsRawForHighlight)); // MODIFIED to unescape
+        numOutfitsTextarea.val(unescapeHtml(outfitsRawForHighlight)); 
         if (outfitsRawForHighlight.trim() !== '') { numOutfitsTextarea.addClass('highlight-green-bold'); } else { numOutfitsTextarea.removeClass('highlight-green-bold'); }
         numOutfitsTextarea.off('input.outfitsHighlight').on('input.outfitsHighlight', function() { if ($(this).val().trim() !== '') { $(this).addClass('highlight-green-bold'); } else { $(this).removeClass('highlight-green-bold'); } });
 
-        $('#modalGeneralNotes').val(unescapeHtml(orderData.GeneralNotes || '')); // MODIFIED to unescape
-        $('#modalOutfitUnavailableNotes').val(unescapeHtml(orderData.OutfitUnavailableNotes || '')); // MODIFIED to unescape
+        $('#modalGeneralNotes').val(unescapeHtml(orderData.GeneralNotes || '')); 
+        $('#modalOutfitUnavailableNotes').val(unescapeHtml(orderData.OutfitUnavailableNotes || '')); 
 
         const prefsList = $('#modalPreferencesList'); prefsList.empty();
         if (orderData.preferenceStockStatus && orderData.preferenceStockStatus.length > 0) {
@@ -1083,12 +1146,11 @@
         $('#saveOrderDetailsBtn').show(); 
         $('#orderDetailsModal').modal('show');
     }
+    
+// --- (The rest of your JavaScript functions: saveOrderDetails, onOrderSaveSuccess, etc. would continue here) ---
+// --- Make sure all previously existing functions are retained below this point. ---
+// --- For brevity, I'm only showing the beginning of the file with the new additions and modifications.---
 
-  // ... (Rest of the JavaScript.html file remains unchanged from saveOrderDetails onwards)
-  // ... Make sure to include all the functions from the previous version like saveOrderDetails,
-  // onOrderSaveSuccess, onOrderSaveFailure, inventory functions, product/collection management,
-  // CSV/Raw data functions, and onFailure.
-  
     function saveOrderDetails() {
         $('#modalSpinner').show(); $('#saveOrderDetailsBtn').prop('disabled', true); clearMessages();
         
@@ -1841,7 +1903,33 @@
 
   // --- CSV, Raw Data, and General Failure ---
   function onRawDataUploaded(result) { hideLoading(); resetFileInput(); if (result && result.success) { displayMessage(result.message || "File uploaded. Ready to process.", "success", 8000); }  else { displayMessage(result.message || "Failed to upload data.", "danger"); } }
-    function resetFileInput() { $('#rawFileUploadInput').val(null); }
+    function resetFileInput() { $('#rawFileUploadInput').val(null); } // This was for raw data, keep it
+
+    // <<< NEW: Handler for product list upload response >>>
+    function onProductListUploaded(result) {
+       hideLoading();
+       resetProductListFileInput(); // Call the new reset function
+       if (result && result.success) {
+           displayMessage(result.message || "Product list processed.", "success", 8000);
+           // Refresh product categories cache and product list in modal
+           google.script.run.withSuccessHandler(cats => {
+               productCategories = cats; 
+               populateProductCategoriesDatalist();
+               // If manage products modal is open, refresh its content
+               if ($('#manageProductsModal').hasClass('show')) {
+                   loadAndShowProductsModal(); 
+               }
+           }).withFailureHandler(onFailure).getProductCategories();
+       } else {
+           displayMessage(result.message || "Failed to process product list.", "danger", 0);
+       }
+   }
+
+   // <<< NEW: Function to reset the product list file input >>>
+   function resetProductListFileInput() {
+       $('#productListUploadInput').val(null); 
+   }
+
 
     function downloadCsv() {
         if (!currentCollectionName || currentCollectionName === '_all_active_') {
