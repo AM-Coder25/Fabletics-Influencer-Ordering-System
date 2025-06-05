@@ -16,6 +16,8 @@
   let newPieceCounter = 0;
   let webAppUrl = null;
   let isCurrentUserAuthorized = false;
+  let currentOutfitImageIdForModal = null; // To store the current image ID for the outfit in the modal
+
 
   // --- Pagination Variables ---
   let currentPage = 1;
@@ -108,9 +110,9 @@
     populateProductCategoriesDatalist(); 
 
     if (isCurrentUserAuthorized) {
-        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #uploadProductListBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').show(); // Added #uploadProductListBtn
+        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #uploadProductListBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').show();
     } else {
-        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #uploadProductListBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').hide(); // Added #uploadProductListBtn
+        $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #uploadProductListBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').hide();
     }
 
     google.script.run.withSuccessHandler(function(allCollectionsForMetrics) {
@@ -496,16 +498,14 @@
       $('#uploadRawDataBtn').off('click').on('click', function() { if (isCurrentUserAuthorized) $('#rawFileUploadInput').click(); else displayMessage("Not authorized.", "warning"); });
       $('#rawFileUploadInput').off('change').on('change', handleRawFileUpload);
 
-      // <<< NEW: Event listener for Upload Product List button >>>
       $('#uploadProductListBtn').off('click').on('click', function() {
           if (isCurrentUserAuthorized) {
-              $('#productListUploadInput').click(); // Trigger hidden file input
+              $('#productListUploadInput').click();
           } else {
               displayMessage("Not authorized to upload product lists.", "warning");
           }
       });
 
-      // <<< NEW: Event listener for the product list file input change >>>
       $('#productListUploadInput').off('change').on('change', function(event) {
           const file = event.target.files[0];
           if (!file) {
@@ -560,6 +560,8 @@
       $('#inventoryContent').off('click', '.btn-edit-stock').on('click', '.btn-edit-stock', function() { handleEditInventoryClick($(this)); });
       $('#inventoryContent').off('click', '.btn-delete-outfit').on('click', '.btn-delete-outfit', function() { handleDeleteOutfitClick($(this)); });
       $('#saveInventoryUpdateBtn').off('click').on('click', saveInventoryUpdate);
+      $('#syncInventoryChangesBtn').off('click').on('click', handleSyncInventoryChanges);
+
 
       $('#addNewOutfitBtn').off('click').on('click', handleAddNewOutfitClick);
       $('#addPieceBtn').off('click').on('click', addPieceRow);
@@ -619,10 +621,6 @@
   }
 
   // --- Event Handler Functions ---
-  // ... (handleEditOrderClick, clearEditHighlight, etc. - all existing functions from here on) ...
-  // ... The rest of your JavaScript functions remain the same as the previously provided complete version ...
-  // ... Ensure all functions like onOrderDetailsLoaded, saveOrderDetails, inventory functions,
-  // product/collection management, CSV, Raw Data, onFailure are included below.
   
   function handleEditOrderClick($button) {
       clearMessages();
@@ -1147,9 +1145,6 @@
         $('#orderDetailsModal').modal('show');
     }
     
-// --- (The rest of your JavaScript functions: saveOrderDetails, onOrderSaveSuccess, etc. would continue here) ---
-// --- Make sure all previously existing functions are retained below this point. ---
-// --- For brevity, I'm only showing the beginning of the file with the new additions and modifications.---
 
     function saveOrderDetails() {
         $('#modalSpinner').show(); $('#saveOrderDetailsBtn').prop('disabled', true); clearMessages();
@@ -1404,8 +1399,16 @@
         $('#inventoryUpdatePiecesContainer').html('<p class="text-center my-3"><div class="spinner-border spinner-border-sm"></div> Loading piece details...</p>');
         $('#inventoryUpdateForm')[0].reset(); 
         $('#inventoryUpdateModal .selectpicker').selectpicker('destroy'); 
+        currentOutfitImageIdForModal = null; 
+        $('#inventoryUpdateModal').data('current-image-id', null); 
         
-        if (isCurrentUserAuthorized) { $('#saveInventoryUpdateBtn').show(); } else { $('#saveInventoryUpdateBtn').hide(); }
+        if (isCurrentUserAuthorized) {
+            $('#saveInventoryUpdateBtn').show();
+            $('#syncInventoryChangesBtn').show(); 
+        } else {
+            $('#saveInventoryUpdateBtn').hide();
+            $('#syncInventoryChangesBtn').hide();
+        }
 
         $('#inventoryUpdateModal').modal('show');
         google.script.run.withSuccessHandler(onInventoryUpdateDataLoaded).withFailureHandler(onFailure).getInventoryForOutfitUpdate(collectionName, outfitName);
@@ -1422,12 +1425,43 @@
         $('#updateOutfitQuickNote').val(outfitData.quickNote || '');
         $('#updateOutfitQuickNote').data('original-quick-note', outfitData.quickNote || '');
 
+        currentOutfitImageIdForModal = outfitData.imageUrl || null; 
+        $('#inventoryUpdateModal').data('current-image-id', currentOutfitImageIdForModal);
+
 
         const container = $('#inventoryUpdatePiecesContainer'); container.empty();
         (outfitData.pieces || []).forEach((p, i) => {
             if (!p.rowIndex) { console.warn("Skipping piece with no rowIndex:", p); return; } 
-            const pieceIndexHtml = `piece_update_${i}`; 
             const pieceIndexForm = i; 
+            const pieceIndexHtml = `piece_update_${i}`;
+            
+            // Store essential non-input data as data attributes on the piece item div
+            const pHtml = `
+               <div class="piece-update-item border p-3 mb-3 bg-light rounded"
+                    data-piece-index="${pieceIndexForm}" 
+                    data-original-sequence="${escapeHtml(p.sequence || (i + 1) * 10)}"
+                    data-product-name="${escapeHtml(p.productName)}"
+                    data-category="${escapeHtml(p.category || 'Unknown')}"
+                    id="item_update_${pieceIndexHtml}">
+                  <input type="hidden" name="pieces[${pieceIndexForm}][rowIndex]" value="${p.rowIndex}">
+                  <h6><i class="fas fa-tshirt mr-2"></i> ${escapeHtml(p.productName)} <small>(${escapeHtml(p.category || 'Unknown')})</small></h6>
+                  <div class="form-row">
+                     <div class="form-group col-md-6"><label>SKU</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][sku]" value="${escapeHtml(p.sku||'')}"></div>
+                     <div class="form-group col-md-6"><label>Color</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][color]" value="${escapeHtml(p.color||'')}"></div>
+                  </div>
+                  <div class="form-row">
+                      <div class="form-group col-md-6"><label>Available Sizes</label><div id="size_selector_container_update_${pieceIndexHtml}"></div></div>
+                      <div class="form-group col-md-3"><label>ETA</label><input type="date" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][eta]" value="${escapeHtml(p.eta||'')}"></div>
+                      <div class="form-group col-md-3"><label>Notes</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][notes]" value="${escapeHtml(p.notes||'')}"></div>
+                  </div>
+                  <div class="form-row">
+                     <div class="form-group col-md-6"><label>Swap SKU</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][swapSku]" value="${escapeHtml(p.swapSku||'')}"></div>
+                     <div class="form-group col-md-6"><label>Swap Sizes</label><div id="swap_size_selector_container_update_${pieceIndexHtml}"></div></div>
+                  </div>
+               </div>`;
+            container.append(pHtml);
+            
+            // Populate size selectors dynamically
             const catUpper = (p.category || '').toUpperCase();
             const sizesForCategory = getSizesForCategory(p.category);
             const isYesNoCategory = catUpper === 'ACCESSORY' || catUpper === 'HAT';
@@ -1445,30 +1479,14 @@
                  sizesForCategory.forEach(s => { sizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
                  sizeSelectorHtml += `</select>`;
             }
+            $(`#size_selector_container_update_${pieceIndexHtml}`).html(sizeSelectorHtml);
 
             let swapSizeSelectorHtml = `<select id="sw_${pieceIndexHtml}" name="pieces[${pieceIndexForm}][swapAvailableSizes]" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Swap Sizes...">`;
+             // Assuming swap sizes are always standard, adjust if needed
             (allSizeOptions.standard || []).forEach(s => { swapSizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
             swapSizeSelectorHtml += `</select>`;
+            $(`#swap_size_selector_container_update_${pieceIndexHtml}`).html(swapSizeSelectorHtml);
 
-            const pHtml = `
-               <div class="piece-update-item border p-3 mb-3 bg-light rounded" data-piece-index="${pieceIndexForm}" id="item_update_${pieceIndexHtml}">
-                  <input type="hidden" name="pieces[${pieceIndexForm}][rowIndex]" value="${p.rowIndex}">
-                  <h6><i class="fas fa-tshirt mr-2"></i> ${escapeHtml(p.productName)} <small>(${escapeHtml(p.category)})</small></h6>
-                  <div class="form-row">
-                     <div class="form-group col-md-6"><label>SKU</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][sku]" value="${escapeHtml(p.sku||'')}"></div>
-                     <div class="form-group col-md-6"><label>Color</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][color]" value="${escapeHtml(p.color||'')}"></div>
-                  </div>
-                  <div class="form-row">
-                      <div class="form-group col-md-6"><label>Available</label><div id="size_selector_container_update_${pieceIndexHtml}">${sizeSelectorHtml}</div></div>
-                      <div class="form-group col-md-3"><label>ETA</label><input type="date" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][eta]" value="${escapeHtml(p.eta||'')}"></div>
-                      <div class="form-group col-md-3"><label>Notes</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][notes]" value="${escapeHtml(p.notes||'')}"></div>
-                  </div>
-                  <div class="form-row">
-                     <div class="form-group col-md-6"><label>Swap SKU</label><input type="text" class="form-control form-control-sm" name="pieces[${pieceIndexForm}][swapSku]" value="${escapeHtml(p.swapSku||'')}"></div>
-                     <div class="form-group col-md-6"><label>Swap Sizes</label><div id="swap_size_selector_container_update_${pieceIndexHtml}">${swapSizeSelectorHtml}</div></div>
-                  </div>
-               </div>`;
-            container.append(pHtml);
 
             if (!isYesNoCategory) {
                  $(`#s_${pieceIndexHtml}`).selectpicker('val', p.availableSizes||[]);
@@ -1480,7 +1498,7 @@
 
     async function saveInventoryUpdate() {
         if (!isCurrentUserAuthorized) { displayMessage("Not authorized to save inventory.", "danger", 0); return; }
-        $('#inventoryUpdateSpinner').show(); $('#saveInventoryUpdateBtn').prop('disabled', true); clearMessages();
+        $('#inventoryUpdateSpinner').show(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', true); clearMessages();
 
         const collName = $('#inventoryUpdateCollectionName').val();
         const outName = $('#inventoryUpdateOutfitNameHidden').val();
@@ -1495,7 +1513,7 @@
 
         $('#inventoryUpdateForm .piece-update-item').each(function(){
             const item = $(this);
-            const i = item.data('piece-index');
+            const i = item.data('piece-index'); // Original index from when pieces were loaded
             const availableSizesVal = item.find(`select[name="pieces[${i}][availableSizes]"]`).val();
             const swapSizesVal = item.find(`select[name="pieces[${i}][swapAvailableSizes]"]`).val();
 
@@ -1510,7 +1528,12 @@
                 swapAvailableSizes: Array.isArray(swapSizesVal) ? swapSizesVal : (swapSizesVal ? [swapSizesVal] : [])
             };
             pieces.push(pieceData);
+            
+            // Basic change detection for pieces
+            // This is a simplified check. A more robust check would compare against original piece data loaded into the modal.
             if (Object.values(pieceData).some(val => {
+                 // Check if any form field value is different from its initial state (if we stored initial states)
+                 // For simplicity, if any piece data is present, assume a potential change.
                  return Array.isArray(val) ? val.length > 0 : (val !== '' && val !== null && val !== undefined && val.toString() !== pieceData.rowIndex.toString());
             })) {
                 formChanged = true;
@@ -1519,42 +1542,188 @@
 
         const imgFile = $('#updateOutfitImage')[0].files[0]; let imgData = null;
         try {
-            imgData = await readFileAsBase64(imgFile);
-            if(imgData) { $('#updateOutfitImage').val(''); formChanged = true; }
-        } catch (e) { displayMessage('Error reading image file.', 'danger', 0); $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false); return; }
+            imgData = await readFileAsBase64(imgFile); 
+            if(imgData) { 
+                $('#updateOutfitImage').val(''); 
+                formChanged = true; 
+            }
+        } catch (e) { 
+            displayMessage('Error reading image file.', 'danger', 0); 
+            $('#inventoryUpdateSpinner').hide(); 
+            $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false); 
+            return; 
+        }
         
         if (!formChanged && !imgData) {
              displayMessage('No changes detected to save.', 'info');
-             $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false);
-             $('#inventoryUpdateModal').modal('hide');
+             $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
              return;
         }
 
-        if (!collName || !outName) { displayMessage('Missing collection or outfit name for update.', 'danger', 0); $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false); return; }
+        if (!collName || !outName) { 
+            displayMessage('Missing collection or outfit name for update.', 'danger', 0); 
+            $('#inventoryUpdateSpinner').hide(); 
+            $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false); 
+            return; 
+        }
         
         google.script.run
             .withSuccessHandler(onInventorySaveSuccess)
             .withFailureHandler(onInventorySaveFailure)
-            .updateInventoryItems(collName, outName, pieces, imgData, newIsActive, newQuickNote);
+            .updateInventoryItems(collName, outName, pieces, imgData, newIsActive, newOutfitQuickNote);
+    }
+    
+    async function handleSyncInventoryChanges() {
+        if (!isCurrentUserAuthorized) {
+            displayMessage("Not authorized to sync inventory.", "danger", 0);
+            return;
+        }
+        if (!currentCollectionName || currentCollectionName === '_all_active_') {
+             displayMessage("Cannot sync: current collection not specific.", "warning");
+             return;
+        }
+
+        const outfitName = $('#inventoryUpdateOutfitNameHidden').val();
+        if (!outfitName) {
+            displayMessage("Cannot sync: Outfit name is missing.", "warning");
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to sync the current changes for outfit "${escapeHtml(outfitName)}" to ALL other ACTIVE collections where this outfit name already exists?\n\nThis will overwrite the outfit's details (pieces, image, active status, quick note) in those collections to match what is currently in this modal.\nThis outfit will NOT be created in active collections where it does not currently exist.\n\nThis action cannot be easily undone for other collections.`)) {
+            return;
+        }
+
+        $('#inventoryUpdateSpinner').show();
+        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', true);
+        clearMessages();
+
+        const piecesForSync = [];
+        $('#inventoryUpdateForm .piece-update-item').each(function(idxInModal) {
+            const item = $(this);
+            const originalPieceLoadedIndex = item.data('piece-index'); 
+            
+            const productName = item.data('product-name');
+            const category = item.data('category');
+            const originalSequence = parseInt(item.data('original-sequence'), 10);
+
+            const availableSizesVal = item.find(`select[name="pieces[${originalPieceLoadedIndex}][availableSizes]"]`).val();
+            const swapSizesVal = item.find(`select[name="pieces[${originalPieceLoadedIndex}][swapAvailableSizes]"]`).val();
+            
+            const pieceData = {
+                productName: productName,
+                sku: item.find(`input[name="pieces[${originalPieceLoadedIndex}][sku]"]`).val().trim(),
+                category: category,
+                color: item.find(`input[name="pieces[${originalPieceLoadedIndex}][color]"]`).val().trim(),
+                availableSizes: Array.isArray(availableSizesVal) ? availableSizesVal : (availableSizesVal ? [availableSizesVal] : []),
+                eta: item.find(`input[name="pieces[${originalPieceLoadedIndex}][eta]"]`).val(),
+                notes: item.find(`input[name="pieces[${originalPieceLoadedIndex}][notes]"]`).val().trim(),
+                swapSku: item.find(`input[name="pieces[${originalPieceLoadedIndex}][swapSku]"]`).val().trim(),
+                swapAvailableSizes: Array.isArray(swapSizesVal) ? swapSizesVal : (swapSizesVal ? [swapSizesVal] : []),
+                sequence: !isNaN(originalSequence) ? originalSequence : (idxInModal + 1) * 10
+            };
+            piecesForSync.push(pieceData);
+        });
+
+        let imageDataForSync = null;
+        const imgFile = $('#updateOutfitImage')[0].files[0];
+        let finalImageUrlForSync = $('#inventoryUpdateModal').data('current-image-id') || null;
+
+
+        if (imgFile) {
+            try {
+                imageDataForSync = await readFileAsBase64(imgFile);
+                // If new image data is being sent, server will save it and get a new ID.
+                // So, finalImageUrlForSync should effectively be null for server to know new image takes precedence.
+                finalImageUrlForSync = null; 
+            } catch (e) {
+                displayMessage('Error reading image file for sync.', 'danger', 0);
+                $('#inventoryUpdateSpinner').hide();
+                $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
+                return;
+            }
+        }
+        
+        const outfitDataForSync = {
+            originalCollectionName: $('#inventoryUpdateCollectionName').val(),
+            outfitName: outfitName,
+            newIsActiveStatus: $('#updateOutfitIsActive').prop('checked'),
+            newOutfitQuickNote: $('#updateOutfitQuickNote').val().trim(),
+            finalImageUrl: finalImageUrlForSync, 
+            imageData: imageDataForSync, 
+            pieces: piecesForSync
+        };
+
+        console.log("Data being sent for sync:", JSON.stringify(outfitDataForSync, null, 2));
+
+        google.script.run
+            .withSuccessHandler(onSyncOutfitSuccess)
+            .withFailureHandler(onSyncOutfitFailure)
+            .syncOutfitAcrossActiveCollections(outfitDataForSync);
     }
 
-    function onInventorySaveSuccess(result) { $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false); if (result?.success) { $('#inventoryUpdateModal').modal('hide'); displayMessage(result.message || 'Inventory updated!', 'success'); if (currentCollectionName && currentCollectionName !== '_all_active_') loadInventoryData(currentCollectionName); } else { displayMessage(result.message || 'Failed to save inventory changes.', 'danger', 0); } }
-    function onInventorySaveFailure(error) { $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn').prop('disabled', false); onFailure(error); displayMessage('Error saving inventory updates.', 'danger', 0); }
+    function onSyncOutfitSuccess(result) {
+        $('#inventoryUpdateSpinner').hide();
+        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
+        if (result?.success) {
+            $('#inventoryUpdateModal').modal('hide'); // Close modal on successful sync
+            displayMessage(result.message || 'Outfit synced successfully!', 'success', 7000);
+             // Clear file input after successful sync processing
+            $('#updateOutfitImage').val('');
+            currentOutfitImageIdForModal = null; // Reset after modal closes or successful operation
+            $('#inventoryUpdateModal').data('current-image-id', null);
+
+
+            if (currentCollectionName && currentCollectionName !== '_all_active_') {
+                loadInventoryData(currentCollectionName); 
+            }
+        } else {
+            displayMessage(result.message || 'Failed to sync outfit changes.', 'danger', 0);
+        }
+    }
+
+    function onSyncOutfitFailure(error) {
+        $('#inventoryUpdateSpinner').hide();
+        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
+        onFailure(error); 
+        displayMessage('Error syncing outfit updates. See console/logs.', 'danger', 0);
+    }
+
+
+    function onInventorySaveSuccess(result) {
+        $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
+        if (result?.success) {
+            displayMessage(result.message || 'Inventory updated!', 'success');
+            if (result.finalImageId !== undefined) { 
+                 currentOutfitImageIdForModal = result.finalImageId;
+                 $('#inventoryUpdateModal').data('current-image-id', currentOutfitImageIdForModal);
+                 $('#updateOutfitImage').val(''); // Clear file input as image is now processed
+            }
+            if (currentCollectionName && currentCollectionName !== '_all_active_') loadInventoryData(currentCollectionName);
+        } else {
+            displayMessage(result.message || 'Failed to save inventory changes.', 'danger', 0);
+        }
+    }
+    function onInventorySaveFailure(error) { $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false); onFailure(error); displayMessage('Error saving inventory updates.', 'danger', 0); }
     function onDeleteOutfitSuccess(result) { hideLoading(); if (result?.success) { displayMessage(result.message || 'Outfit deleted.', 'success'); if (currentCollectionName && currentCollectionName !== '_all_active_') loadInventoryData(currentCollectionName); } else { displayMessage(result.message || 'Failed to delete outfit.', 'danger'); } }
 
     // --- Add Outfit Modal Functions ---
     function addPieceRow() {
         newPieceCounter++; const idx = newPieceCounter;
+        // Default to standard sizes for new pieces, category change will update this.
         let availableSizeOptionsHtml = (allSizeOptions.standard || []).map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
         let sizeSelectorHtml = `<select id="s_new_${idx}" name="pieces[${idx}][availableSizes]" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Sizes...">${availableSizeOptionsHtml}</select>`;
-        let swapSizeOptionsHtml = availableSizeOptionsHtml; 
+        
+        let swapSizeOptionsHtml = (allSizeOptions.standard || []).map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join(''); 
         let swapSizeSelectorHtml = `<select id="sw_new_${idx}" name="pieces[${idx}][swapAvailableSizes]" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Swap Sizes...">${swapSizeOptionsHtml}</select>`;
+        
         let productCategoryInput = `<input type="text" class="form-control form-control-sm" list="productCategoriesDataList" name="pieces[${idx}][category]" placeholder="Enter or Select Category" onchange="updateSizeOptions('new_${idx}', this.value)">`;
         
         const html = `
           <div class="new-piece-item border p-3 mb-3 bg-light rounded position-relative" data-piece-index="${idx}" id="item_new_${idx}">
             <button type="button" class="close remove-piece-btn text-danger position-absolute" style="top:10px;right:15px;" title="Remove Piece">&times;</button>
-            <h6>Piece ${idx} Details</h6>
+            <h6>Piece <span class="piece-display-number">${idx}</span> Details</h6>
+             {/* Hidden input for sequence, can be auto-generated or made editable later if needed */}
+             {/* <input type="hidden" name="pieces[${idx}][sequence]" value="${idx * 10}"> */}
             <div class="form-row">
               <div class="form-group col-md-5"><label>Product Name*</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][productName]" required><div class="invalid-feedback">Required.</div></div>
               <div class="form-group col-md-4"><label>SKU*</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][sku]" required><div class="invalid-feedback">Required.</div></div>
@@ -1584,15 +1753,42 @@
             Object.values(productCategories).forEach(cat => baseCategories.add(cat));
         }
 
-        if (datalist.children().length === 0 || datalist.children().length < baseCategories.size) {
-            datalist.empty();
-            baseCategories.forEach(cat => datalist.append(`<option value="${escapeHtml(cat)}">`));
+        // Only repopulate if necessary to avoid flicker/losing input focus if user is typing
+        const existingOptions = new Set();
+        datalist.find('option').each(function() { existingOptions.add($(this).val()); });
+
+        let needsRepopulate = false;
+        if (datalist.children().length !== baseCategories.size) {
+            needsRepopulate = true;
+        } else {
+            for (const cat of baseCategories) {
+                if (!existingOptions.has(cat)) {
+                    needsRepopulate = true;
+                    break;
+                }
+            }
         }
 
-         const prodCatDatalistManage = $('#productCategoriesList'); 
-         if (prodCatDatalistManage.children().length === 0 || prodCatDatalistManage.children().length < baseCategories.size ) {
+        if (needsRepopulate) {
+            datalist.empty();
+            Array.from(baseCategories).sort().forEach(cat => datalist.append(`<option value="${escapeHtml(cat)}">`));
+        }
+
+
+         const prodCatDatalistManage = $('#productCategoriesList'); // For the manage products modal
+         const existingManageOptions = new Set();
+         prodCatDatalistManage.find('option').each(function() { existingManageOptions.add($(this).val()); });
+         let needsManageRepopulate = false;
+         if(prodCatDatalistManage.children().length !== baseCategories.size){
+            needsManageRepopulate = true;
+         } else {
+            for (const cat of baseCategories) {
+                if(!existingManageOptions.has(cat)) { needsManageRepopulate = true; break;}
+            }
+         }
+         if (needsManageRepopulate) {
              prodCatDatalistManage.empty();
-             baseCategories.forEach(cat => prodCatDatalistManage.append(`<option value="${escapeHtml(cat)}">`));
+             Array.from(baseCategories).sort().forEach(cat => prodCatDatalistManage.append(`<option value="${escapeHtml(cat)}">`));
          }
     }
 
@@ -1616,7 +1812,7 @@
 
          let newSizeSelectorHtml = '';
          const selectorId = `s_${pieceIdPrefix}`; 
-         const nameAttr = currentSizeSelect.attr('name'); 
+         const nameAttr = currentSizeSelect.attr('name') || `pieces[${pieceIdPrefix.replace(/[^0-9]/g, '')}][availableSizes]`; // Fallback name if needed
 
          if (isYesNo) {
              newSizeSelectorHtml = `<select id="${selectorId}" name="${nameAttr}" class="form-control form-control-sm">`;
@@ -1638,14 +1834,16 @@
               else $(`#${selectorId}`).val(sizesForCat[0] || ''); 
          }
 
+         // For swap sizes, consistently use standard sizes unless specific logic dictates otherwise
+         const swapSizesToUse = allSizeOptions.standard || [];
          const swapSelectorId = `sw_${pieceIdPrefix}`;
-         const swapNameAttr = currentSwapSelect.attr('name'); 
+         const swapNameAttr = currentSwapSelect.attr('name') || `pieces[${pieceIdPrefix.replace(/[^0-9]/g, '')}][swapAvailableSizes]`; 
          let newSwapSizeSelectorHtml = `<select id="${swapSelectorId}" name="${swapNameAttr}" class="form-control form-control-sm selectpicker" multiple data-actions-box="true" title="Select Swap Sizes...">`;
-         (allSizeOptions.standard || []).forEach(s => { newSwapSizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+         swapSizesToUse.forEach(s => { newSwapSizeSelectorHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
          newSwapSizeSelectorHtml += `</select>`;
          swapSizeContainer.html(newSwapSizeSelectorHtml);
          $(`#${swapSelectorId}`).selectpicker('render');
-         if(Array.isArray(currentSwapVal)) $(`#${swapSelectorId}`).selectpicker('val', currentSwapVal.filter(v => (allSizeOptions.standard || []).includes(v) ));
+         if(Array.isArray(currentSwapVal)) $(`#${swapSelectorId}`).selectpicker('val', currentSwapVal.filter(v => swapSizesToUse.includes(v) ));
     }
 
      function getSizesForCategory(cat) {
@@ -1685,12 +1883,13 @@
          const isActive = true; 
          const pieces = [];
 
-         $('#newOutfitPiecesContainer .new-piece-item').each(function() {
+         $('#newOutfitPiecesContainer .new-piece-item').each(function(pieceIndex) { 
               const item = $(this);
               const i = item.data('piece-index'); 
               const availableSizesVal = item.find(`select[name="pieces[${i}][availableSizes]"]`).val();
               const swapSizesVal = item.find(`select[name="pieces[${i}][swapAvailableSizes]"]`).val();
               const pieceData = {
+                  sequence: (pieceIndex + 1) * 10, 
                   productName: item.find(`input[name="pieces[${i}][productName]"]`).val().trim(),
                   sku: item.find(`input[name="pieces[${i}][sku]"]`).val().trim(),
                   category: item.find(`input[name="pieces[${i}][category]"]`).val().trim(),
@@ -1903,19 +2102,16 @@
 
   // --- CSV, Raw Data, and General Failure ---
   function onRawDataUploaded(result) { hideLoading(); resetFileInput(); if (result && result.success) { displayMessage(result.message || "File uploaded. Ready to process.", "success", 8000); }  else { displayMessage(result.message || "Failed to upload data.", "danger"); } }
-    function resetFileInput() { $('#rawFileUploadInput').val(null); } // This was for raw data, keep it
+    function resetFileInput() { $('#rawFileUploadInput').val(null); } 
 
-    // <<< NEW: Handler for product list upload response >>>
     function onProductListUploaded(result) {
        hideLoading();
-       resetProductListFileInput(); // Call the new reset function
+       resetProductListFileInput(); 
        if (result && result.success) {
            displayMessage(result.message || "Product list processed.", "success", 8000);
-           // Refresh product categories cache and product list in modal
            google.script.run.withSuccessHandler(cats => {
                productCategories = cats; 
                populateProductCategoriesDatalist();
-               // If manage products modal is open, refresh its content
                if ($('#manageProductsModal').hasClass('show')) {
                    loadAndShowProductsModal(); 
                }
@@ -1925,7 +2121,6 @@
        }
    }
 
-   // <<< NEW: Function to reset the product list file input >>>
    function resetProductListFileInput() {
        $('#productListUploadInput').val(null); 
    }
@@ -1964,7 +2159,7 @@
      isLoadingOrders = false;
      hideLoading();
      $('#modalSpinner, #inventoryUpdateSpinner, #addOutfitSpinner, #addProductSpinner, #saveCollectionSpinner').hide();
-     $('#saveOrderDetailsBtn, #saveInventoryUpdateBtn, #saveNewOutfitBtn, #saveProductBtn, #saveCollectionBtn').prop('disabled', false);
+     $('#saveOrderDetailsBtn, #saveInventoryUpdateBtn, #saveNewOutfitBtn, #saveProductBtn, #saveCollectionBtn, #syncInventoryChangesBtn').prop('disabled', false);
 
      console.error('Server Script Error:', error);
      let message = `Error: ${error.message || 'An unknown server error occurred.'}`;
