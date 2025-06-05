@@ -1570,7 +1570,7 @@
         google.script.run
             .withSuccessHandler(onInventorySaveSuccess)
             .withFailureHandler(onInventorySaveFailure)
-            .updateInventoryItems(collName, outName, pieces, imgData, newIsActive, newOutfitQuickNote);
+            .updateInventoryItems(collName, outName, pieces, imgData, newIsActive, newQuickNote);
     }
     
     async function handleSyncInventoryChanges() {
@@ -1692,6 +1692,7 @@
     function onInventorySaveSuccess(result) {
         $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
         if (result?.success) {
+            $('#inventoryUpdateModal').modal('hide'); // MODIFIED LINE
             displayMessage(result.message || 'Inventory updated!', 'success');
             if (result.finalImageId !== undefined) { 
                  currentOutfitImageIdForModal = result.finalImageId;
