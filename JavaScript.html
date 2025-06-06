@@ -1139,7 +1139,7 @@
         $('#modalFulfillmentStatus').val(orderData.FulfillmentStatus || 'Pending'); 
         $('#modalOrderIssue').val(orderData.OrderIssue || '');
         $('#modalPromoCodeUsed').val(orderData.PromoCodeUsedDisplay || 'N/A'); 
-        $('#modalSwap').val(orderData.Swap || '');
+        $('#modalSwap').prop('checked', orderData.Swap === 'Swap');
 
         $('#saveOrderDetailsBtn').show(); 
         $('#orderDetailsModal').modal('show');
@@ -1150,27 +1150,25 @@
         $('#modalSpinner').show(); $('#saveOrderDetailsBtn').prop('disabled', true); clearMessages();
         
         const formDataArray = $('#orderDetailsForm').serializeArray();
-        const tempFormData = {}; 
+        const formData = {}; 
         formDataArray.forEach(item => { 
-            if (tempFormData[item.name]) {
-                if (!Array.isArray(tempFormData[item.name])) {
-                    tempFormData[item.name] = [tempFormData[item.name]];
+            if (formData[item.name]) {
+                if (!Array.isArray(formData[item.name])) {
+                    formData[item.name] = [formData[item.name]];
                 }
-                tempFormData[item.name].push(item.value);
+                formData[item.name].push(item.value);
             } else {
-                tempFormData[item.name] = item.value;
+                formData[item.name] = item.value;
             }
         });
-        
-        const formData = {};
-        for (const key in tempFormData) {
-            if (key !== 'OutfitOrdered' && key !== 'OutfitOrdered2') { 
-                formData[key] = tempFormData[key];
-            }
-        }
 
-        let outfit1Value = tempFormData['OutfitOrdered'] ? String(tempFormData['OutfitOrdered']).trim() : "";
-        let outfit2Value = $('#modalTwoOutfitsCheckbox').is(':checked') ? (tempFormData['OutfitOrdered2'] ? String(tempFormData['OutfitOrdered2']).trim() : "") : ""; 
+        // Manually set Swap value since unchecked boxes are not serialized
+        if (!formData.hasOwnProperty('Swap')) {
+            formData.Swap = ""; 
+        }
+        
+        let outfit1Value = formData['OutfitOrdered'] ? String(formData['OutfitOrdered']).trim() : "";
+        let outfit2Value = $('#modalTwoOutfitsCheckbox').is(':checked') ? (formData['OutfitOrdered2'] ? String(formData['OutfitOrdered2']).trim() : "") : ""; 
 
         let finalOutfitOrdered = outfit1Value;
         if (outfit2Value) { 
@@ -1692,7 +1690,7 @@
     function onInventorySaveSuccess(result) {
         $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
         if (result?.success) {
-            $('#inventoryUpdateModal').modal('hide'); // MODIFIED LINE
+            $('#inventoryUpdateModal').modal('hide');
             displayMessage(result.message || 'Inventory updated!', 'success');
             if (result.finalImageId !== undefined) { 
                  currentOutfitImageIdForModal = result.finalImageId;
@@ -1723,8 +1721,6 @@
           <div class="new-piece-item border p-3 mb-3 bg-light rounded position-relative" data-piece-index="${idx}" id="item_new_${idx}">
             <button type="button" class="close remove-piece-btn text-danger position-absolute" style="top:10px;right:15px;" title="Remove Piece">&times;</button>
             <h6>Piece <span class="piece-display-number">${idx}</span> Details</h6>
-             {/* Hidden input for sequence, can be auto-generated or made editable later if needed */}
-             {/* <input type="hidden" name="pieces[${idx}][sequence]" value="${idx * 10}"> */}
             <div class="form-row">
               <div class="form-group col-md-5"><label>Product Name*</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][productName]" required><div class="invalid-feedback">Required.</div></div>
               <div class="form-group col-md-4"><label>SKU*</label><input type="text" class="form-control form-control-sm" name="pieces[${idx}][sku]" required><div class="invalid-feedback">Required.</div></div>
@@ -1747,50 +1743,40 @@
     }
 
     function populateProductCategoriesDatalist() {
-        const datalist = $('#productCategoriesDataList'); 
-        const baseCategories = new Set(['JACKET/TOP', 'BRA', 'DRESS', 'SOCK', 'ONESIE', 'BOTTOM', 'BOTTOM (IN)', 'ACCESSORY', 'HAT', 'Kids Jacket/Top', 'Kids Bra', 'Kids Bottom', 'Bottom - W/Inseam', 'Bottom (IN) - W/Inseam']);
-        
+        const datalist = $('#productCategoriesDataList');
+        const prodCatDatalistManage = $('#productCategoriesList'); // For the manage products modal
+
+        // Use a Map to store the normalized category (lowercase) and its preferred display format.
+        const categoryMap = new Map();
+
+        // 1. Add hardcoded base categories first.
+        const baseCategories = ['JACKET/TOP', 'BRA', 'DRESS', 'SOCK', 'ONESIE', 'BOTTOM', 'BOTTOM (IN)', 'ACCESSORY', 'HAT', 'Kids Jacket/Top', 'Kids Bra', 'Kids Bottom', 'Bottom - W/Inseam', 'Bottom (IN) - W/Inseam'];
+        baseCategories.forEach(cat => {
+            // Store the lowercase version as the key and the original hardcoded version as the value.
+            categoryMap.set(cat.toLowerCase(), cat);
+        });
+
+        // 2. Add categories from the Products sheet. This will overwrite the hardcoded ones if there's a case-insensitive match.
         if (productCategories && Object.keys(productCategories).length > 0) {
-            Object.values(productCategories).forEach(cat => baseCategories.add(cat));
-        }
-
-        // Only repopulate if necessary to avoid flicker/losing input focus if user is typing
-        const existingOptions = new Set();
-        datalist.find('option').each(function() { existingOptions.add($(this).val()); });
-
-        let needsRepopulate = false;
-        if (datalist.children().length !== baseCategories.size) {
-            needsRepopulate = true;
-        } else {
-            for (const cat of baseCategories) {
-                if (!existingOptions.has(cat)) {
-                    needsRepopulate = true;
-                    break;
+            Object.values(productCategories).forEach(cat => {
+                if (cat && cat.trim()) { // Ensure category is not empty
+                    // The value from the sheet is preferred for display.
+                    categoryMap.set(cat.trim().toLowerCase(), cat.trim());
                 }
-            }
+            });
         }
 
-        if (needsRepopulate) {
-            datalist.empty();
-            Array.from(baseCategories).sort().forEach(cat => datalist.append(`<option value="${escapeHtml(cat)}">`));
-        }
-
-
-         const prodCatDatalistManage = $('#productCategoriesList'); // For the manage products modal
-         const existingManageOptions = new Set();
-         prodCatDatalistManage.find('option').each(function() { existingManageOptions.add($(this).val()); });
-         let needsManageRepopulate = false;
-         if(prodCatDatalistManage.children().length !== baseCategories.size){
-            needsManageRepopulate = true;
-         } else {
-            for (const cat of baseCategories) {
-                if(!existingManageOptions.has(cat)) { needsManageRepopulate = true; break;}
-            }
-         }
-         if (needsManageRepopulate) {
-             prodCatDatalistManage.empty();
-             Array.from(baseCategories).sort().forEach(cat => prodCatDatalistManage.append(`<option value="${escapeHtml(cat)}">`));
-         }
+        // Now, get the unique, sorted display values from the map.
+        const uniqueCategories = Array.from(categoryMap.values()).sort((a,b) => a.localeCompare(b));
+        
+        // Clear and repopulate both datalists to ensure they are in sync
+        datalist.empty();
+        prodCatDatalistManage.empty();
+        uniqueCategories.forEach(cat => {
+            const optionHtml = `<option value="${escapeHtml(cat)}">`;
+            datalist.append(optionHtml);
+            prodCatDatalistManage.append(optionHtml);
+        });
     }
 
     function updateSizeOptions(pieceIdPrefix, category) {
