@@ -1,302 +1,330 @@
 <script>
-  let allCollectionsForStatsDashboard = []; // Specific for this page
-  let isCurrentUserAuthorizedForStats = false; // If any actions here need auth
+    let allCollectionsForStatsDashboard = [];
+    let isCurrentUserAuthorizedForStats = false;
 
-  function showLoadingStats(message = 'Loading...') {
-    $('#loadingIndicatorStats p').text(message);
-    $('#loadingIndicatorStats').fadeIn(200);
-  }
+    function showLoadingStats(message = 'Loading...') {
+        $('#loadingIndicatorStats p').text(message);
+        $('#loadingIndicatorStats').fadeIn(200);
+    }
 
-  function hideLoadingStats() {
-    $('#loadingIndicatorStats').fadeOut(200);
-  }
+    function hideLoadingStats() {
+        $('#loadingIndicatorStats').fadeOut(200);
+    }
 
-  function displayMessageStats(message, type = 'success', duration = 5000) {
+    function displayMessageStats(message, type = 'success', duration = 5000) {
         const alertId = `alert-stats-${Date.now()}`;
-        const alertClass = type === 'danger' ? 'alert-danger' : (type === 'warning' ? 'alert-warning' : 'alert-success');
-        const iconClass = type === 'danger' ? 'fa-exclamation-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : 'fa-check-circle');
-        const alertElement = $(`<div id="${alertId}" class="alert ${alertClass} alert-dismissible fade show" role="alert" style="margin-bottom: 5px;"><i class="fas ${iconClass} mr-2"></i> ${escapeHtml(message)}<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>`);
+        const alertClass = type === 'danger' ? 'alert-danger' : (type === 'warning' ? 'alert-warning' : (type === 'info' ? 'alert-info' : 'alert-success'));
+        const iconClass = type === 'danger' ? 'fa-exclamation-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : (type === 'info' ? 'fa-info-circle' : 'fa-check-circle'));
+        const alertElement = $(`<div id="${alertId}" class="alert ${alertClass} alert-dismissible fade show shadow-sm" role="alert"><i class="fas ${iconClass} mr-2"></i> ${escapeHtml(message)}<button type="button" class="close" data-dismiss="alert">&times;</button></div>`);
         $('#messageAreaStats').append(alertElement);
-        if (duration > 0) { setTimeout(() => { $(`#${alertId}`).alert('close'); }, duration); }
-  }
-  function escapeHtml(unsafe) {
+        if (duration > 0) {
+            setTimeout(() => {
+                $(`#${alertId}`).alert('close');
+            }, duration);
+        }
+    }
+
+    function escapeHtml(unsafe) {
         if (unsafe === null || typeof unsafe === 'undefined') return '';
         return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-   }
+    }
 
+    $(document).ready(function() {
+        showLoadingStats('Initializing Dashboard...');
+        google.script.run
+            .withSuccessHandler(onAllCollectionsLoadedForStatsPage)
+            .withFailureHandler(onStatsPageFailure)
+            .getCollectionsList();
 
-  $(document).ready(function() {
-    showLoadingStats('Initializing Stats Dashboard...');
-    google.script.run
-        .withSuccessHandler(onAllCollectionsLoadedForStatsPage)
-        .withFailureHandler(onStatsPageFailure)
-        .getCollectionsList(); 
+        $('#dashboardCollectionSelectStats').selectpicker();
 
-    $('#dashboardCollectionSelectStats').selectpicker();
-    $('#loadDashboardBtnStats').on('click', function() {
-         const selectedCollections = $('#dashboardCollectionSelectStats').val();
-         if (selectedCollections && selectedCollections.length > 0) {
-             const collectionsArray = Array.isArray(selectedCollections) ? selectedCollections : [selectedCollections];
-             loadDetailedStatsData(collectionsArray);
-         } else {
-             displayMessageStats("Please select at least one collection for the detailed stats.", "warning");
-             $('#dashboardContentStats').empty().html('<p class="text-center text-muted">Select collections and click Load Detailed Stats.</p>');
-             $('#dashboardTitleStats span').text('No Collection Selected');
-         }
+        $('#loadDashboardBtnStats').on('click', function() {
+            const selectedCollections = $('#dashboardCollectionSelectStats').val();
+            if (selectedCollections && selectedCollections.length > 0) {
+                const collectionsArray = Array.isArray(selectedCollections) ? selectedCollections : [selectedCollections];
+                loadDetailedStatsData(collectionsArray);
+            } else {
+                displayMessageStats("Please select at least one collection to analyze.", "warning");
+                $('#dashboardContentStats').empty().html('<div class="col-12 text-center text-muted p-5"><h3>Select Collections to Begin Analysis</h3></div>');
+            }
+        });
+        
+        // Event delegation for the toggle button which is added dynamically
+        $(document).on('click', '#toggleDetailedStatsBtn', function() {
+            $('#detailedStatsContainer').slideToggle();
+            const icon = $(this).find('i');
+            if (icon.hasClass('fa-plus-circle')) {
+                $(this).html('<i class="fas fa-minus-circle"></i> Hide Detailed Breakdown');
+                $(this).removeClass('btn-outline-secondary').addClass('btn-secondary');
+            } else {
+                $(this).html('<i class="fas fa-plus-circle"></i> Show Detailed Breakdown');
+                $(this).removeClass('btn-secondary').addClass('btn-outline-secondary');
+            }
+        });
+
+        google.script.run.withSuccessHandler(authResult => isCurrentUserAuthorizedForStats = authResult)
+            .withFailureHandler(onStatsPageFailure)
+            .isUserAuthorizedForProcessing();
     });
-    google.script.run.withSuccessHandler(authResult => isCurrentUserAuthorizedForStats = authResult)
-                     .withFailureHandler(onStatsPageFailure) 
-                     .isUserAuthorizedForProcessing();
-  });
 
-  function onAllCollectionsLoadedForStatsPage(allCollectionsData) {
-    hideLoadingStats();
-    console.log("All collections received for stats page:", JSON.stringify(allCollectionsData));
-    allCollectionsForStatsDashboard = allCollectionsData || [];
-    populateStatsDashboardCollectionSelector();
+    function onAllCollectionsLoadedForStatsPage(allCollectionsData) {
+        hideLoadingStats();
+        allCollectionsForStatsDashboard = allCollectionsData || [];
+        populateStatsDashboardCollectionSelector();
 
-    const activeNames = allCollectionsForStatsDashboard.filter(c => c.isActive).map(c => c.name);
-    if (activeNames.length > 0) {
-        $('#dashboardCollectionSelectStats').selectpicker('val', activeNames);
-        loadDetailedStatsData(activeNames);
-    } else {
-        $('#dashboardContentStats').html('<p class="text-center text-muted">No active collections found to display stats initially.</p>');
-        $('#dashboardTitleStats span').text('No Active Collections');
-    }
-    // Log user access after initial data load for the stats page
-    google.script.run.withFailureHandler(onStatsPageFailure).logActivity("VIEW_ACCESS", "Loaded Monthly Stats Page"); // UPDATED
-  }
-
-  function populateStatsDashboardCollectionSelector() {
-    const select = $('#dashboardCollectionSelectStats');
-    select.empty();
-    if (!allCollectionsForStatsDashboard || allCollectionsForStatsDashboard.length === 0) {
-        select.prop('disabled', true).selectpicker('refresh');
-        return;
-    }
-    select.prop('disabled', false);
-    const active = allCollectionsForStatsDashboard.filter(c => c.isActive).sort((a, b) => a.name.localeCompare(b.name));
-    const inactive = allCollectionsForStatsDashboard.filter(c => !c.isActive).sort((a, b) => a.name.localeCompare(b.name));
-
-    if (active.length > 0) {
-        const activeGroup = $('<optgroup label="Active Collections"></optgroup>');
-        active.forEach(c => { if (c && c.name) activeGroup.append($('<option>', { value: c.name, text: c.name })); });
-        select.append(activeGroup);
-    }
-    if (inactive.length > 0) {
-         const inactiveGroup = $('<optgroup label="Inactive Collections"></optgroup>');
-         inactive.forEach(c => { if (c && c.name) inactiveGroup.append($('<option>', { value: c.name, text: c.name })); });
-         select.append(inactiveGroup);
-    }
-    select.selectpicker('refresh');
-  }
-
-  function loadDetailedStatsData(collectionNamesArray) {
-      if (!collectionNamesArray || collectionNamesArray.length === 0) {
-          $('#dashboardContentStats').html('<p class="text-center text-muted">Please select one or more collections.</p>');
-          $('#dashboardTitleStats span').text('No Collection Selected');
-          return;
-      }
-      showLoadingStats('Loading detailed stats...');
-      $('#dashboardContentStats').empty().html('<p class="text-center text-muted"><i>Loading detailed stats...</i></p>');
-      google.script.run
-          .withSuccessHandler(function(stats){
-               hideLoadingStats();
-               populateDetailedStats(stats, collectionNamesArray);
-           })
-          .withFailureHandler(function(err) {
-               hideLoadingStats();
-               onStatsPageFailure(err);
-               $('#dashboardContentStats').html('<p class="text-center text-danger">Error loading detailed stats.</p>');
-           })
-          .getDashboardStats(collectionNamesArray); 
-  }
-
-  function populateDetailedStats(stats, selectedCollections) {
-     const dashboardTitle = $('#dashboardTitleStats span');
-     const detailedContent = $('#dashboardContentStats');
-     detailedContent.empty(); 
-
-     if (selectedCollections && selectedCollections.length === 1) {
-         dashboardTitle.text(escapeHtml(selectedCollections[0]));
-     } else if (selectedCollections && selectedCollections.length > 1) {
-         dashboardTitle.text(`Multiple (${selectedCollections.length}) Collections`);
-     } else {
-         dashboardTitle.text('No Collection Selected');
-     }
-
-    if (stats.error) {
-        detailedContent.html(`<p class="text-center text-danger">Error: ${escapeHtml(stats.error)}</p>`);
-        return;
-    }
-      
-    // Card for Total Orders
-    detailedContent.append(`
-          <div class="col-md-12 mb-3">
-              <div class="card">
-                  <div class="card-body text-center">
-                      <h5 class="card-title">${stats.totalOrders || 0}</h5>
-                      <p class="card-text">Total Orders (Selected Collections)</p>
-                  </div>
-              </div>
-          </div>`);
-    
-    // Card for Status Counts
-    detailedContent.append(`
-          <div class="col-md-12 mb-3">
-              <div class="card">
-                  <div class="card-body">
-                       <h6 class="card-subtitle mb-2 text-muted">Status Counts</h6>
-                       <div id="statStatusCountsDetailedStatsPage" class="row"></div>
-                  </div>
-              </div>
-          </div>`);
-    
-    // Card for Owner Statistics
-    detailedContent.append(`
-           <div class="col-md-12 mb-3"> 
-              <div class="card">
-                  <div class="card-body">
-                       <h6 class="card-subtitle mb-2 text-muted">Owner Statistics</h6>
-                       <div id="statOwnerStatsDetailedStatsPage"></div>
-                  </div>
-              </div>
-          </div>`);
-
-    // Row for side-by-side cards
-    let statsRowHtml = `<div class="col-md-6 mb-3">
-                            <div class="card h-100">
-                                <div class="card-body">
-                                     <h6 class="card-subtitle mb-2 text-muted">Top 10 Ordered Outfits (Total)</h6>
-                                     <div id="statOutfitCountsDetailedStatsPage"></div>
-                                </div>
-                            </div>
-                        </div>`;
-    statsRowHtml += `<div class="col-md-6 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                 <h6 class="card-subtitle mb-2 text-muted">Top 10 Order Issues</h6>
-                                 <div id="statOrderIssuesDetailedStatsPage"><p class="text-muted">Loading issues...</p></div>
-                            </div>
-                        </div>
-                    </div>`;
-    detailedContent.append(statsRowHtml);
-
-    statsRowHtml = `<div class="col-md-6 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                 <h6 class="card-subtitle mb-2 text-muted">Outfits Placed in Bond (Fulfilled/Resolved)</h6>
-                                 <div id="statPlacedOutfitCountsDetailedStatsPage"></div>
-                            </div>
-                        </div>
-                    </div>`;
-    statsRowHtml += `<div class="col-md-6 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                 <h6 class="card-subtitle mb-2 text-muted">First Choice Conversion Counts</h6>
-                                 <div id="statFirstChoiceFullCountsDetailedStatsPage"></div>
-                            </div>
-                        </div>
-                    </div>`;
-    detailedContent.append(statsRowHtml);
-    
-    statsRowHtml = `<div class="col-md-6 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                 <h6 class="card-subtitle mb-2 text-muted">Popularity as First Choice</h6>
-                                 <div id="statPref1OutfitCountsDetailedStatsPage"></div>
-                            </div>
-                        </div>
-                    </div>`;
-     detailedContent.append(statsRowHtml);
-
-
-     const statusContDetailed = $('#statStatusCountsDetailedStatsPage'); statusContDetailed.empty();
-     if (stats.statusCounts && Object.keys(stats.statusCounts).length > 0) {
-          const sortedStatuses = Object.entries(stats.statusCounts).sort(([sA],[sB]) => sA.localeCompare(sB));
-          sortedStatuses.forEach(([status, count]) => {
-              const sc = 'status-' + (status || 'Unknown').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
-               statusContDetailed.append(`<div class="col-md-3 col-6 mb-2"><span class="badge ${sc} mr-2">${escapeHtml(status)}</span>: ${count}</div>`);
-          });
-     } else statusContDetailed.append('<div class="col"><p class="text-muted">No status data.</p></div>');
-
-    const ownerContDetailed = $('#statOwnerStatsDetailedStatsPage'); ownerContDetailed.empty();
-      if (stats.ownerStats && Object.keys(stats.ownerStats).length > 0) {
-           let tableHtml = '<div class="table-responsive"><table class="table table-sm table-striped table-hover mb-0"><thead><tr><th>Owner</th><th>Total</th><th>Placed</th><th>Pending</th><th>Complete</th></tr></thead><tbody>';
-           const sortedOwners = Object.entries(stats.ownerStats).sort(([ownerA], [ownerB]) => ownerA.localeCompare(ownerB));
-           sortedOwners.forEach(([owner, data]) => {
-              const percent = data.completionPercent || 0;
-              const progressBar = `<div class="progress" style="height: 18px; font-size: 0.75rem;"><div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%;" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100">${percent>15 ? percent+'%' : ''}</div></div>`;
-               tableHtml += `<tr><td>${escapeHtml(owner)}</td><td>${data.total || 0}</td><td>${data.placed || 0}</td><td>${data.pending || 0}</td><td style="min-width: 100px;">${progressBar}</td></tr>`;
-           });
-           tableHtml += '</tbody></table></div>'; ownerContDetailed.html(tableHtml);
-      } else { ownerContDetailed.html('<p class="text-center text-muted">No owner data.</p>'); }
-
-     const outfitContDetailed = $('#statOutfitCountsDetailedStatsPage'); outfitContDetailed.empty();
-      if (stats.outfitCounts && Object.keys(stats.outfitCounts).length > 0) {
-           const sortedOutfits = Object.entries(stats.outfitCounts).sort(([, cA], [, cB]) => cB - cA).slice(0, 10);
-           let list = '<ul class="list-unstyled mb-0">';
-           sortedOutfits.forEach(([outfit, count]) => {
-                list += `<li>${escapeHtml(outfit)}: <strong>${count}</strong></li>`;
-           });
-           list += '</ul>'; outfitContDetailed.append(list);
-      } else outfitContDetailed.append('<p class="text-muted">No outfit data.</p>');
-
-    const issuesContainerDetailed = $('#statOrderIssuesDetailedStatsPage'); issuesContainerDetailed.empty();
-    if (stats.issueCounts && Object.keys(stats.issueCounts).length > 0) {
-        const sortedIssues = Object.entries(stats.issueCounts).sort(([, countA], [, countB]) => countB - countA).slice(0, 10);
-        let issuesListHtml = '<ul class="list-unstyled mb-0">';
-        sortedIssues.forEach(([issue, count]) => { issuesListHtml += `<li>${escapeHtml(issue)}: <strong>${count}</strong></li>`; });
-        issuesListHtml += '</ul>';
-        issuesContainerDetailed.html(issuesListHtml);
-    } else {
-        issuesContainerDetailed.html('<p class="text-muted">No order issue data available.</p>');
-    }
-    
-    const placedOutfitCont = $('#statPlacedOutfitCountsDetailedStatsPage'); placedOutfitCont.empty();
-    if (stats.placedOutfitCounts && Object.keys(stats.placedOutfitCounts).length > 0) {
-        const sortedPlacedOutfits = Object.entries(stats.placedOutfitCounts).sort(([,countA], [,countB]) => countB - countA); 
-        let placedList = '<ul class="list-unstyled mb-0" style="max-height: 200px; overflow-y: auto;">';
-        sortedPlacedOutfits.forEach(([outfit, count]) => {
-            placedList += `<li>${escapeHtml(outfit)}: <strong>${count}</strong></li>`;
-        });
-        placedList += '</ul>';
-        placedOutfitCont.html(placedList);
-    } else {
-        placedOutfitCont.html('<p class="text-muted">No outfits recorded as placed in bond.</p>');
+        const activeNames = allCollectionsForStatsDashboard.filter(c => c.isActive).map(c => c.name);
+        if (activeNames.length > 0) {
+            $('#dashboardCollectionSelectStats').selectpicker('val', activeNames);
+            loadDetailedStatsData(activeNames);
+        } else {
+            $('#dashboardContentStats').html('<div class="col-12 text-center text-muted p-5"><h3>No active collections found.</h3><p>Select an inactive collection to analyze historical data.</p></div>');
+        }
+        google.script.run.withFailureHandler(onStatsPageFailure).logActivity("VIEW_ACCESS", "Loaded PR & Performance Dashboard");
     }
 
-    const firstChoiceFullCont = $('#statFirstChoiceFullCountsDetailedStatsPage'); firstChoiceFullCont.empty();
-    if (stats.firstChoiceCounts && Object.keys(stats.firstChoiceCounts).length > 0) {
-        const sortedFirstChoices = Object.entries(stats.firstChoiceCounts).sort(([,countA], [,countB]) => countB - countA); 
-        let fcList = '<ul class="list-unstyled mb-0" style="max-height: 200px; overflow-y: auto;">';
-        sortedFirstChoices.forEach(([outfit, count]) => {
-            fcList += `<li>${escapeHtml(outfit)}: <strong>${count}</strong> (ordered as 1st choice)</li>`;
-        });
-        fcList += '</ul>';
-        firstChoiceFullCont.html(fcList);
-    } else {
-        firstChoiceFullCont.html('<p class="text-muted">No orders recorded as first choice.</p>');
+    function populateStatsDashboardCollectionSelector() {
+        const select = $('#dashboardCollectionSelectStats');
+        select.empty();
+        if (!allCollectionsForStatsDashboard || allCollectionsForStatsDashboard.length === 0) {
+            select.prop('disabled', true).selectpicker('refresh');
+            return;
+        }
+        select.prop('disabled', false);
+        const active = allCollectionsForStatsDashboard.filter(c => c.isActive).sort((a, b) => a.name.localeCompare(b.name));
+        const inactive = allCollectionsForStatsDashboard.filter(c => !c.isActive).sort((a, b) => a.name.localeCompare(b.name));
+
+        if (active.length > 0) {
+            const activeGroup = $('<optgroup label="Active Collections"></optgroup>');
+            active.forEach(c => {
+                if (c && c.name) activeGroup.append($('<option>', {
+                    value: c.name,
+                    text: c.name
+                }));
+            });
+            select.append(activeGroup);
+        }
+        if (inactive.length > 0) {
+            const inactiveGroup = $('<optgroup label="Inactive/Archived Collections"></optgroup>');
+            inactive.forEach(c => {
+                if (c && c.name) inactiveGroup.append($('<option>', {
+                    value: c.name,
+                    text: c.name
+                }));
+            });
+            select.append(inactiveGroup);
+        }
+        select.selectpicker('refresh');
     }
 
-    const pref1OutfitCont = $('#statPref1OutfitCountsDetailedStatsPage');
-    pref1OutfitCont.empty();
-    if (stats.pref1OutfitCounts && Object.keys(stats.pref1OutfitCounts).length > 0) {
-        const sortedPref1Outfits = Object.entries(stats.pref1OutfitCounts).sort(([, countA], [, countB]) => countB - countA); 
-        let p1List = '<ul class="list-unstyled mb-0" style="max-height: 200px; overflow-y: auto;">';
-        sortedPref1Outfits.forEach(([outfit, count]) => {
-            p1List += `<li>${escapeHtml(outfit)}: <strong>${count}</strong></li>`;
-        });
-        p1List += '</ul>';
-        pref1OutfitCont.html(p1List);
-    } else {
-        pref1OutfitCont.html('<p class="text-muted">No data for first choice popularity.</p>');
+    function loadDetailedStatsData(collectionNamesArray) {
+        if (!collectionNamesArray || collectionNamesArray.length === 0) {
+            $('#dashboardContentStats').html('<div class="col-12 text-center text-muted p-5"><h3>Select Collections to Begin Analysis</h3></div>');
+            return;
+        }
+        showLoadingStats('Calculating Performance Metrics...');
+        $('#dashboardContentStats').empty().html('<div class="col-12 text-center text-muted p-5"><i>Crunching the numbers...</i></div>');
+        google.script.run
+            .withSuccessHandler(function(stats) {
+                hideLoadingStats();
+                populateDetailedStats(stats, collectionNamesArray);
+            })
+            .withFailureHandler(function(err) {
+                hideLoadingStats();
+                onStatsPageFailure(err);
+                $('#dashboardContentStats').html('<div class="col-12 text-center text-danger p-5"><h3>Error Loading Data</h3><p>Could not retrieve performance metrics.</p></div>');
+            })
+            .getDashboardStats(collectionNamesArray);
     }
-  }
 
-  function onStatsPageFailure(error) {
-     hideLoadingStats();
-     console.error('Stats Page Script Error:', error);
-     displayMessageStats(`Error: ${error.message || 'Unknown server error.'}`, 'danger', 0);
-  }
+    function populateDetailedStats(stats, selectedCollections) {
+        const content = $('#dashboardContentStats');
+        content.empty();
+
+        if (stats.error) {
+            content.html(`<div class="col-12 text-center text-danger p-5"><h3>Error</h3><p>${escapeHtml(stats.error)}</p></div>`);
+            return;
+        }
+
+        // --- Calculate KPIs ---
+        const totalOrders = stats.totalOrders || 0;
+        const fulfilledOrResolved = (stats.statusCounts['Fulfilled'] || 0) + (stats.statusCounts['Resolved'] || 0);
+        const fulfillmentRate = totalOrders > 0 ? Math.round((fulfilledOrResolved / totalOrders) * 100) : 0;
+        
+        const totalFirstChoiceRequests = Object.values(stats.pref1OutfitCounts || {}).reduce((a, b) => a + b, 0);
+        const totalFirstChoiceFills = Object.values(stats.firstChoiceCounts || {}).reduce((a, b) => a + b, 0);
+        const firstChoiceRate = totalFirstChoiceRequests > 0 ? Math.round((totalFirstChoiceFills / totalFirstChoiceRequests) * 100) : 0;
+
+        // --- Build Dashboard ---
+
+        // Section 1: KPIs
+        let kpiHtml = `
+            <h2 class="dashboard-section-header">Performance Snapshot</h2>
+            <div class="row mb-4">
+                <div class="col-md-4 mb-3">
+                    <div class="kpi-card">
+                        <div class="kpi-value">${totalOrders}</div>
+                        <div class="kpi-label">Total Influencer Orders</div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="kpi-card">
+                        <div class="kpi-value">${fulfillmentRate}<small>%</small></div>
+                        <div class="kpi-label">Order Fulfillment Rate</div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="kpi-card" style="border-left-color: #28a745;">
+                        <div class="kpi-value">${firstChoiceRate}<small>%</small></div>
+                        <div class="kpi-label">First-Choice Fulfillment</div>
+                    </div>
+                </div>
+            </div>`;
+        content.append(kpiHtml);
+
+        // Section 2: The Hits
+        content.append('<h2 class="dashboard-section-header">Product & Outfit Insights: What\'s Hot?</h2>');
+        const topRequested = Object.entries(stats.pref1OutfitCounts || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const topPlaced = Object.entries(stats.placedOutfitCounts || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+        let hitsHtml = '<div class="row"><div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title text-center">Most Requested</h5><p class="text-center text-muted small">Top 10 outfits from influencers\' first preference.</p><ul class="list-group list-group-flush hits-list">';
+        if (topRequested.length > 0) {
+            topRequested.forEach(([name, count]) => {
+                hitsHtml += `<li class="list-group-item"><span class="outfit-name">${escapeHtml(name)}</span> <span class="badge badge-purple badge-pill">${count}</span></li>`;
+            });
+        } else {
+            hitsHtml += '<li class="list-group-item text-muted">No preference data available.</li>';
+        }
+        hitsHtml += '</ul></div></div></div>';
+
+        hitsHtml += '<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title text-center">Most Shipped</h5><p class="text-center text-muted small">Top 10 outfits successfully placed & shipped.</p><ul class="list-group list-group-flush hits-list">';
+        if (topPlaced.length > 0) {
+            topPlaced.forEach(([name, count]) => {
+                hitsHtml += `<li class="list-group-item"><span class="outfit-name">${escapeHtml(name)}</span> <span class="badge badge-success badge-pill">${count}</span></li>`;
+            });
+        } else {
+            hitsHtml += '<li class="list-group-item text-muted">No shipped data available.</li>';
+        }
+        hitsHtml += '</ul></div></div></div></div>';
+        content.append(hitsHtml);
+
+        // Section 3: Operational Health
+        content.append('<h2 class="dashboard-section-header">Operational Health</h2>');
+        let opsHtml = '<div class="row">';
+        opsHtml += '<div class="col-lg-8 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title text-center">Team Performance</h5><div id="statOwnerStatsDetailedStatsPage"></div></div></div></div>';
+        opsHtml += '<div class="col-lg-4 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title text-center">Top Order Issues</h5><div id="statOrderIssuesDetailedStatsPage"></div></div></div></div>';
+        opsHtml += '</div>';
+        content.append(opsHtml);
+
+        // Populate Owner Stats Table
+        const ownerContDetailed = $('#statOwnerStatsDetailedStatsPage');
+        ownerContDetailed.empty();
+        if (stats.ownerStats && Object.keys(stats.ownerStats).length > 0) {
+            let tableHtml = '<div class="table-responsive"><table class="table table-sm table-striped table-hover mb-0"><thead><tr><th>Owner</th><th>Total Orders</th><th>Placed</th><th>Pending</th><th>Completion Rate</th></tr></thead><tbody>';
+            const sortedOwners = Object.entries(stats.ownerStats).sort(([ownerA], [ownerB]) => ownerA.localeCompare(ownerB));
+            sortedOwners.forEach(([owner, data]) => {
+                const percent = data.completionPercent || 0;
+                const progressBar = `<div class="progress"><div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%;" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100">${percent > 15 ? percent+'%' : ''}</div></div>`;
+                tableHtml += `<tr><td>${escapeHtml(owner)}</td><td class="text-center">${data.total || 0}</td><td class="text-center">${data.placed || 0}</td><td class="text-center">${data.pending || 0}</td><td style="min-width: 120px;">${progressBar}</td></tr>`;
+            });
+            tableHtml += '</tbody></table></div>';
+            ownerContDetailed.html(tableHtml);
+        } else {
+            ownerContDetailed.html('<p class="text-center text-muted mt-3">No owner data available.</p>');
+        }
+
+        // Populate Order Issues List
+        const issuesContainerDetailed = $('#statOrderIssuesDetailedStatsPage');
+        issuesContainerDetailed.empty();
+        if (stats.issueCounts && Object.keys(stats.issueCounts).length > 0) {
+            const sortedIssues = Object.entries(stats.issueCounts).sort(([, countA], [, countB]) => countB - countA).slice(0, 5);
+            let issuesListHtml = '<ul class="list-group list-group-flush hits-list">';
+            sortedIssues.forEach(([issue, count]) => {
+                issuesListHtml += `<li class="list-group-item">${escapeHtml(issue)} <span class="badge badge-light badge-pill">${count}</span></li>`;
+            });
+            issuesListHtml += '</ul>';
+            issuesContainerDetailed.html(issuesListHtml);
+        } else {
+            issuesContainerDetailed.html('<p class="text-center text-muted mt-3">No order issues recorded.</p>');
+        }
+        
+        // --- Detailed Breakdown Section (Collapsible) ---
+        let breakdownButton = `<div class="text-center mt-4"><button class="btn btn-outline-secondary" id="toggleDetailedStatsBtn"><i class="fas fa-plus-circle"></i> Show Detailed Breakdown</button></div>`;
+        let breakdownContainer = `<div id="detailedStatsContainer" style="display:none;" class="mt-4">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card"><div class="card-body">
+                        <h5 class="card-title text-center">Complete Status Breakdown</h5>
+                        <div id="fullStatusList"></div>
+                    </div></div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card"><div class="card-body">
+                        <h5 class="card-title text-center">Top 10 First-Choice Conversions</h5>
+                         <p class="text-center text-muted small">Requested outfits successfully shipped as first choice.</p>
+                        <div id="fullFirstChoiceList"></div>
+                    </div></div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card"><div class="card-body">
+                        <h5 class="card-title text-center">Top 10 Assigned Outfits</h5>
+                         <p class="text-center text-muted small">Outfits assigned in the 'Outfit Ordered' field, all statuses.</p>
+                        <div id="fullAssignedOutfitList"></div>
+                    </div></div>
+                </div>
+            </div>
+        </div>`;
+        content.append(breakdownButton).append(breakdownContainer);
+
+        // Populate Full Status List
+        const fullStatusList = $('#fullStatusList');
+        if (stats.statusCounts && Object.keys(stats.statusCounts).length > 0) {
+            let statusGridHtml = '<div class="row">';
+            const sortedStatuses = Object.entries(stats.statusCounts).sort(([sA],[sB]) => sA.localeCompare(sB));
+            sortedStatuses.forEach(([status, count]) => {
+                const badgeClass = 'status-' + (status || 'unknown').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
+                 statusGridHtml += `<div class="col-12 d-flex justify-content-between align-items-center p-2 border-bottom">
+                                     <span>${escapeHtml(status)}</span>
+                                     <span class="badge ${badgeClass} badge-pill">${count}</span>
+                                   </div>`;
+            });
+            statusGridHtml += '</div>';
+            fullStatusList.html(statusGridHtml);
+        } else {
+            fullStatusList.html('<p class="text-muted">No status data.</p>');
+        }
+        
+        // Populate Top 10 First Choice Conversion List
+        const fullFcList = $('#fullFirstChoiceList');
+        if (stats.firstChoiceCounts && Object.keys(stats.firstChoiceCounts).length > 0) {
+            let listHtml = '<ul class="list-group list-group-flush hits-list">';
+            const sortedFc = Object.entries(stats.firstChoiceCounts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+            sortedFc.forEach(([name, count]) => {
+                listHtml += `<li class="list-group-item">${escapeHtml(name)} <span class="badge badge-success badge-pill">${count}</span></li>`;
+            });
+            listHtml += '</ul>';
+            fullFcList.html(listHtml);
+        } else {
+            fullFcList.html('<p class="text-muted">No first-choice conversion data.</p>');
+        }
+        
+        // Populate Top 10 Assigned Outfits List
+        const fullAssignedList = $('#fullAssignedOutfitList');
+        if (stats.outfitCounts && Object.keys(stats.outfitCounts).length > 0) {
+            let listHtml = '<ul class="list-group list-group-flush hits-list">';
+            const sortedAssigned = Object.entries(stats.outfitCounts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+            sortedAssigned.forEach(([name, count]) => {
+                listHtml += `<li class="list-group-item">${escapeHtml(name)} <span class="badge badge-info badge-pill">${count}</span></li>`;
+            });
+            listHtml += '</ul>';
+            fullAssignedList.html(listHtml);
+        } else {
+            fullAssignedList.html('<p class="text-muted">No assigned outfit data.</p>');
+        }
+    }
+
+    function onStatsPageFailure(error) {
+        hideLoadingStats();
+        console.error('Stats Page Script Error:', error);
+        displayMessageStats(`Error: ${error.message || 'Unknown server error.'}`, 'danger', 0);
+    }
 </script>
