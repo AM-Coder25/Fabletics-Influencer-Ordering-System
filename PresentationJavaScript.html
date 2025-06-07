@@ -9,11 +9,6 @@
             .withFailureHandler(handleError)
             .getCollectionsList();
         
-        // Check for authorization to show bg image upload
-        google.script.run.withSuccessHandler(isAuthorized => {
-            if (isAuthorized) { $('#bgUploadContainer').show(); }
-        }).withFailureHandler(handleError).isUserAuthorizedForProcessing();
-        
         // Load any existing background image
         google.script.run.withSuccessHandler(bgFileId => {
             if (bgFileId) { setBackground(bgFileId); }
@@ -22,7 +17,6 @@
         // Set listeners for buttons
         $('#loadDataBtn').on('click', loadData);
         $('#downloadPdfBtn').on('click', downloadAsPdf);
-        $('#bgImageUpload').on('change', handleBgImageUpload);
 
         // Listeners for granular AI buttons
         $('#generateExecSummaryBtn').on('click', () => generateAiInsight('ExecutiveSummary', '#aiExecSummary'));
@@ -111,7 +105,7 @@
 
         google.script.run
             .withSuccessHandler(response => {
-                aiContainer.html(response.replace(/\n/g, '<br>'));
+                aiContainer.html(response);
             })
             .withFailureHandler(error => {
                 aiContainer.html(`<span class="text-danger">AI insight generation failed: ${error.message}</span>`);
@@ -145,29 +139,6 @@
         } else {
             container.html('<p class="text-muted text-center">No owner data available.</p>');
         }
-    }
-
-    function handleBgImageUpload(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        $('#loadingOverlay').show();
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            // Apply background instantly for better UX
-            $('#backgroundOverlay').css('background-image', `url(${e.target.result})`);
-            
-            // Send to server to save for future sessions
-            const imageData = {
-                base64Data: e.target.result,
-                mimeType: file.type,
-                fileName: 'presentation-background-' + Date.now()
-            };
-            google.script.run.withSuccessHandler(() => {
-                $('#loadingOverlay').hide();
-                alert("Background image updated.");
-            }).withFailureHandler(handleError).uploadAndSetBgImage(imageData);
-        };
-        reader.readAsDataURL(file);
     }
 
     function setBackground(fileId) {
