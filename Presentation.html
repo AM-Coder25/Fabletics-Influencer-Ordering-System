@@ -63,6 +63,14 @@
       .kpi-card-value { font-size: 2.8rem; font-weight: 700; color: #1a202c; line-height: 1.1; }
       .kpi-card-label { font-size: 0.9rem; color: #718096; }
 
+      /* Icon Color Classes */
+      .icon-color-1 { color: #6f42c1; } /* Fabletics Purple */
+      .icon-color-2 { color: #00c9a7; } /* Vibrant Teal */
+      .icon-color-3 { color: #ff69b4; } /* The original Hot Pink */
+      .data-card-title .icon-color-1, .data-card-title .icon-color-2, .data-card-title .icon-color-3 {
+          opacity: 0.85;
+      }
+
       /* Lists */
       .styled-list { list-style: none; padding-left: 0; flex-grow: 1; }
       .styled-list li { display: flex; justify-content: space-between; align-items: center; padding: 12px 5px; border-bottom: 1px solid #edf2f7; }
@@ -98,19 +106,15 @@
                         <button id="downloadPdfBtn" class="btn btn-secondary btn-block mt-3 mt-lg-0" style="display:none;"><i class="fas fa-file-pdf"></i> Download PDF</button>
                     </div>
                 </div>
-                <div id="bgUploadContainer" class="mt-3 border-top pt-3" style="display:none;">
-                    <label for="bgImageUpload">Upload Presentation Background Image</label>
-                    <input type="file" class="form-control-file" id="bgImageUpload" accept="image/*">
-                </div>
             </div>
         </div>
 
         <div id="presentation-content" style="display:none;">
             <div class="section-title">The Big Picture: Our Story in Numbers</div>
             <div class="row">
-                <div class="col-md-4"><div class="data-card kpi-card"><div class="kpi-card-icon"><i class="fas fa-shopping-bag"></i></div><div id="kpiTotalOrders" class="kpi-card-value">--</div><div class="kpi-card-label">Total Influencer Orders</div></div></div>
-                <div class="col-md-4"><div class="data-card kpi-card"><div class="kpi-card-icon"><i class="fas fa-truck"></i></div><div id="kpiFulfillmentRate" class="kpi-card-value">--%</div><div class="kpi-card-label">Order Fulfillment Rate</div></div></div>
-                <div class="col-md-4"><div class="data-card kpi-card"><div class="kpi-card-icon"><i class="fas fa-check-circle"></i></div><div id="kpiFirstChoiceRate" class="kpi-card-value">--%</div><div class="kpi-card-label">First-Choice Fulfillment</div></div></div>
+                <div class="col-md-4"><div class="data-card kpi-card"><div class="kpi-card-icon icon-color-1"><i class="fas fa-shopping-bag"></i></div><div id="kpiTotalOrders" class="kpi-card-value">--</div><div class="kpi-card-label">Total Influencer Orders</div></div></div>
+                <div class="col-md-4"><div class="data-card kpi-card"><div class="kpi-card-icon icon-color-2"><i class="fas fa-truck"></i></div><div id="kpiFulfillmentRate" class="kpi-card-value">--%</div><div class="kpi-card-label">Order Fulfillment Rate</div></div></div>
+                <div class="col-md-4"><div class="data-card kpi-card"><div class="kpi-card-icon icon-color-3"><i class="fas fa-check-circle"></i></div><div id="kpiFirstChoiceRate" class="kpi-card-value">--%</div><div class="kpi-card-label">First-Choice Fulfillment</div></div></div>
             </div>
             <div class="text-center mt-3">
                 <button id="generateExecSummaryBtn" class="ai-button"><i class="fas fa-magic"></i> Generate Executive Summary</button>
@@ -119,8 +123,8 @@
 
             <div class="section-title mt-5">Product Insights: What's Hot?</div>
             <div class="row">
-                <div class="col-md-6"><div class="data-card"><h5 class="data-card-title"><i class="fas fa-fire"></i>Most Requested</h5><ul id="listMostRequested" class="styled-list"></ul></div></div>
-                <div class="col-md-6"><div class="data-card"><h5 class="data-card-title"><i class="fas fa-box-open"></i>Most Shipped</h5><ul id="listMostShipped" class="styled-list"></ul></div></div>
+                <div class="col-md-6"><div class="data-card"><h5 class="data-card-title"><i class="fas fa-fire icon-color-1"></i>Most Requested</h5><ul id="listMostRequested" class="styled-list"></ul></div></div>
+                <div class="col-md-6"><div class="data-card"><h5 class="data-card-title"><i class="fas fa-box-open icon-color-2"></i>Most Shipped</h5><ul id="listMostShipped" class="styled-list"></ul></div></div>
             </div>
             <div class="text-center mt-3">
                 <button id="analyzeProductBtn" class="ai-button"><i class="fas fa-chart-line"></i> Analyze Product Performance</button>
@@ -129,8 +133,8 @@
 
             <div class="section-title mt-5">Operational Health & Team Performance</div>
             <div class="row">
-                <div class="col-md-7"><div class="data-card"><h5 class="data-card-title"><i class="fas fa-users"></i>Team Performance</h5><div id="tableTeamPerformance"></div></div></div>
-                <div class="col-md-5"><div class="data-card"><h5 class="data-card-title"><i class="fas fa-exclamation-triangle"></i>Top Fulfillment Issues</h5><ul id="listTopIssues" class="styled-list"></ul></div></div>
+                <div class="col-md-7"><div class="data-card"><h5 class="data-card-title"><i class="fas fa-users icon-color-1"></i>Team Performance</h5><div id="tableTeamPerformance"></div></div></div>
+                <div class="col-md-5"><div class="data-card"><h5 class="data-card-title"><i class="fas fa-exclamation-triangle icon-color-3"></i>Top Fulfillment Issues</h5><ul id="listTopIssues" class="styled-list"></ul></div></div>
             </div>
             <div class="text-center mt-3">
                 <button id="suggestImprovementsBtn" class="ai-button"><i class="fas fa-lightbulb"></i> Suggest Operational Improvements</button>
@@ -139,8 +143,8 @@
             
             <div class="section-title mt-5">Key Takeaways & Next Steps</div>
             <div class="row">
-                <div class="col-md-6"><div class="data-card" style="background-color: #e6fffa;"><h5 class="data-card-title" style="color:#2c7a7b;"><i class="fas fa-check"></i>Successes</h5><div id="divSuccesses"></div></div></div>
-                <div class="col-md-6"><div class="data-card" style="background-color: #fffaf0;"><h5 class="data-card-title" style="color:#dd6b20;"><i class="fas fa-arrow-right"></i>Opportunities & Action Items</h5><div id="divOpportunities"></div></div></div>
+                <div class="col-md-6"><div class="data-card" style="background-color: #e6fffa;"><h5 class="data-card-title" style="color:#2c7a7b;"><i class="fas fa-check icon-color-2"></i>Successes</h5><div id="divSuccesses"></div></div></div>
+                <div class="col-md-6"><div class="data-card" style="background-color: #fffaf0;"><h5 class="data-card-title" style="color:#dd6b20;"><i class="fas fa-arrow-right icon-color-1"></i>Opportunities & Action Items</h5><div id="divOpportunities"></div></div></div>
             </div>
             <div class="text-center mt-3">
                 <button id="brainstormNextStepsBtn" class="ai-button"><i class="fas fa-brain"></i> Brainstorm Actionable Next Steps</button>
