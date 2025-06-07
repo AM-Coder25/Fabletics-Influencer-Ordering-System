@@ -62,7 +62,6 @@ if (!rawImportSheet) Logger.log(`CRITICAL ERROR: RawImport sheet not found in FI
 // UPDATED: Warnings for log sheets now refer to the Admin Log spreadsheet context
 if (!errorLogSheet) Logger.log(`WARNING: ErrorLog sheet not found in the Admin Log spreadsheet (ID: ${ADMIN_LOG_SPREADSHEET_ID}). Error logging will fail.`);
 if (!userActivityLogSheet) Logger.log(`WARNING: UserActivityLog sheet not found in the Admin Log spreadsheet (ID: ${ADMIN_LOG_SPREADSHEET_ID}). User activity logging will fail.`);
-
 const scriptCache = CacheService.getScriptCache();
 const CACHE_EXPIRATION_SECONDS = 3600; // 1 hour
 
@@ -118,7 +117,6 @@ const INV_HEADERS = {
   SWAP_SIZES: "SwapAvailableSizes", NOTES: "StockStatusNotes", IS_ACTIVE: "IsActive", 
   OUTFIT_QUICK_NOTE: "OutfitQuickNote" 
 };
-
 // --- Error Logging ---
 function logError(functionName, errorMessage, details = '') {
   if (!errorLogSheet) {
@@ -218,16 +216,21 @@ function doGet(e) {
                 <!DOCTYPE html><html><head><title>Access Denied</title>
                 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+             
                 <style>body { display: flex; align-items: center; justify-content: center; height: 100vh; background-color: #f8f9fa; text-align: center; }</style>
                 </head><body><div class="container">
                 <h3 class="mb-3"><i class="fas fa-lock mr-2"></i>Access Denied</h3>
                 <p class="lead">You are not authorized to view this page.</p>
                 <p><a href="${SCRIPT_URL || getScriptUrl()}" class="btn btn-primary"><i class="fas fa-home"></i> Go to Main Application</a></p>
-                 </div></body></html>`;
+           
+         </div></body></html>`;
             return HtmlService.createHtmlOutput(deniedHtml).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
         }
         template = HtmlService.createTemplateFromFile('AdminConfig');
         pageTitle = 'Admin Configuration & Activity';
+    } else if (e.parameter && e.parameter.view === 'presentation') { // <<< MODIFICATION HERE
+        template = HtmlService.createTemplateFromFile('Presentation');
+        pageTitle = 'Influencer Program Performance';
     } else { // Main application view 
       if (!ordersSheet || !inventorySheet || !configSheet || !collectionsSheet || !productsSheet) {
           logError('doGet', 'One or more critical sheets in Active SS not found or accessible for main app.', `Check IDs and permissions.`);
@@ -260,8 +263,7 @@ function getScriptUrl() {
 }
 
 function getImageData(fileId) {
-  if (!fileId) { Logger.log("getImageData: No File ID provided."); return null;
-  }
+  if (!fileId) { Logger.log("getImageData: No File ID provided."); return null; }
   try {
     if (!/^[a-zA-Z0-9_-]+$/.test(fileId)) throw new Error("Invalid File ID format provided.");
     const file = DriveApp.getFileById(fileId);
@@ -682,8 +684,7 @@ function isUserAuthorizedForProcessing() {
     const cacheKey = 'authorizedProcessors_active';
     let cachedEmails = scriptCache.get(cacheKey);
     let authorizedEmails;
-    if (cachedEmails) { try { authorizedEmails = JSON.parse(cachedEmails);
-    } catch(e){/* ignore parse error, refetch */} }
+    if (cachedEmails) { try { authorizedEmails = JSON.parse(cachedEmails); } catch(e){/* ignore parse error, refetch */} }
 
     if (!authorizedEmails) {
         try {
@@ -854,8 +855,7 @@ function splitOutfitPreferences(rawPreferences) {
 
 function getActiveCollections() {
     const cacheKey = 'activeCollections_activeSS';
-    const cached = scriptCache.get(cacheKey); if (cached) { try { return JSON.parse(cached);
-    } catch(e){/* ignore */} }
+    const cached = scriptCache.get(cacheKey); if (cached) { try { return JSON.parse(cached); } catch(e){/* ignore */} }
     if (!collectionsSheet) {
         logError('getActiveCollections', 'Collections sheet (in Active SS) not found.');
         return [];
@@ -1028,14 +1028,16 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
             if (row[indices.FulfillmentStatus] === 'Remove') {
                 return false;
             }
-            if (row[indices.CollectionName] !== collectionName) return false;
+       
+             if (row[indices.CollectionName] !== collectionName) return false;
 
             if (ownerFilterLower && row[indices.Owner]?.toString().toLowerCase() !== ownerFilterLower) return false;
             if (nameFilterLower && !row[indices.Contact]?.toString().toLowerCase().includes(nameFilterLower)) return false;
             if (emailFilterLower && !row[indices.Email]?.toString().toLowerCase().includes(emailFilterLower)) return false;
             
             if (orderIssueFilter && indices.ORDER_ISSUE !== undefined &&
-                (row[indices.ORDER_ISSUE]?.toString().trim() !== orderIssueFilter) ) {
+       
+                 (row[indices.ORDER_ISSUE]?.toString().trim() !== orderIssueFilter) ) {
                 return false;
             }
 
@@ -1200,7 +1202,7 @@ function getOrderDetails(orderId) {
 
       const emailToCheck = orderData.email?.toString().trim();
       finalData.duplicateInfo = emailToCheck ? getDuplicateOrderInfo(collectionName, emailToCheck, orderData.order_id) : {
-            isDuplicate: false, otherOrderIds: []
+          isDuplicate: false, otherOrderIds: []
       };
 
       return finalData;
@@ -1240,7 +1242,7 @@ function getDuplicateOrderInfo(collectionName, email, currentOrderId) {
              }
          }
          return { isDuplicate: foundCount > 1, otherOrderIds: otherOrderIds };
-     } catch (e) {
+    } catch (e) {
          logError('getDuplicateOrderInfo', `Error checking duplicates (Active SS) for ${collectionName}/${email}: ${e.message}`, e.stack);
          return { isDuplicate: false, otherOrderIds: [] };
     }
@@ -1249,8 +1251,7 @@ function getDuplicateOrderInfo(collectionName, email, currentOrderId) {
 function getDropdownOptions(optionType) {
     const cacheKey = `dropdownOptions_${optionType}_activeSS`;
     const cached = scriptCache.get(cacheKey);
-    if (cached) { try { return JSON.parse(cached);
-    } catch(e){/* ignore malformed cache, refetch */} }
+    if (cached) { try { return JSON.parse(cached); } catch(e){/* ignore malformed cache, refetch */} }
 
     if (!configSheet) {
         logError('getDropdownOptions', `Config sheet (Active SS) not found for ${optionType}.`);
@@ -1617,7 +1618,7 @@ function getInventoryByCollection(collectionName) {
           .forEach(r => {
             const oName = r[idx.OUTFIT_NAME];
             if (!outfits[oName]) {
-                outfits[oName] = {
+               outfits[oName] = {
                     name: oName,
                     imageUrl: idx.IMAGE_URL > -1 && r.length > idx.IMAGE_URL ? r[idx.IMAGE_URL] || '' : '',
                     isActive: idx.IS_ACTIVE > -1 && r.length > idx.IS_ACTIVE ? r[idx.IS_ACTIVE] === true : true,
@@ -1718,7 +1719,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
             if (pCatUp === "BOTTOM - W/INSEAM" || pCatUp === "BOTTOM (IN) - W/INSEAM") {
                 sizeConsumingPieceCount += 2;
             } else {
-                sizeConsumingPieceCount += 1;
+                 sizeConsumingPieceCount += 1;
             }
         } else if (pCatUp === sockCategory || yesNoCategories.includes(pCatUp)) {
             sizeConsumingPieceCount += 1;
@@ -1920,7 +1921,7 @@ function getInventoryForOutfitUpdate(collectionName, outfitName) {
              );
              p.rowIndex = rIdx !== -1 ? rIdx + 1 : 0;
              if(p.rowIndex===0) Logger.log(`Warning (Active SS Inv Update): Row not found for ${outfitName}-SKU:${p.sku}. This piece cannot be updated by its original SKU if it changed.`);
-        });
+         });
         return targetOutfit;
     } catch(e){
         logError('getInventoryForOutfitUpdate', `Error fetching inventory for update ${collectionName}-${outfitName} from Active SS: ${e.message}`, e.stack);
@@ -2000,7 +2001,7 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
         piecesToUpdate.forEach(pieceData => {
             if (!pieceData.rowIndex || pieceData.rowIndex <= 0 || pieceData.rowIndex > invData.length) {
                 Logger.log(`Skipping piece update due to invalid row index: ${pieceData.rowIndex} for SKU ${pieceData.sku || 'Unknown'}`);
-                   return;
+                return;
             }
             const sheetRowForPiece = pieceData.rowIndex;
             const currentPieceSheetData = invData[sheetRowForPiece - 1];
@@ -2062,9 +2063,11 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
                 quickNoteChanged: newOutfitQuickNote !== null
             };
             logActivity("INVENTORY_UPDATE", `Updated inventory for ${collectionName}-${outfitName}`, logDetails);
-            return { success: true, message: `Inventory updated successfully for ${outfitName}.`, finalImageId: newImageFileId }; // Return finalImageId
+            return { success: true, message: `Inventory updated successfully for ${outfitName}.`, finalImageId: newImageFileId };
+            // Return finalImageId
         }
-        return { success: true, message: "No changes were detected for the inventory.", finalImageId: newImageFileId }; // Return finalImageId even if no other changes
+        return { success: true, message: "No changes were detected for the inventory.", finalImageId: newImageFileId };
+        // Return finalImageId even if no other changes
 
     } catch (e) {
         logError('updateInventoryItems', `Error updating inventory for ${collectionName}-${outfitName} in Active SS: ${e.message}`, e.stack);
@@ -2075,7 +2078,8 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
 
 /**
  * Synchronizes outfit details (pieces, active status, image, quick note) across all active collections
- * where the outfit already exists. It does NOT create the outfit in active collections where it's missing.
+ * where the outfit already exists.
+ It does NOT create the outfit in active collections where it's missing.
  * @param {object} outfitDataFromClient Object containing canonical outfit details.
  * Expected properties:
  * - originalCollectionName (string): The collection where the edit was initiated.
@@ -2083,7 +2087,8 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
  * - newIsActiveStatus (boolean): The desired active status for the outfit.
  * - newOutfitQuickNote (string): The desired quick note.
  * - finalImageUrl (string|null): The File ID of the image to use for the outfit, or null if no specific image to sync.
- * - pieces (Array<object>): The definitive list of piece objects for this outfit. Each piece object should have:
+ * - pieces (Array<object>): The definitive list of piece objects for this outfit.
+ * Each piece object should have:
  * { productName, sku, category, color, availableSizes: [], eta, notes, swapSku, swapAvailableSizes: [], sequence }
  * @return {object} Result object {success: boolean, message: string}
  */
@@ -2103,10 +2108,9 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
   }
 
   Logger.log(`SYNC: Starting sync for Outfit: "${outfitDataFromClient.outfitName}" initiated from Collection: "${outfitDataFromClient.originalCollectionName}"`);
-
   try {
-    let imageIdToPropagate = outfitDataFromClient.finalImageUrl || null; // This is the key: client sends the image ID decided during the modal edit.
-
+    let imageIdToPropagate = outfitDataFromClient.finalImageUrl || null;
+    // This is the key: client sends the image ID decided during the modal edit.
     // If new base64 image data was sent (e.g., user uploaded a new image *during the sync action specifically*, which is unlikely with current UI but good to handle)
     // This part is more relevant if the "sync" button itself could trigger an image upload.
     // For now, we assume `finalImageUrl` is the one to use, potentially set by a prior `updateInventoryItems` call.
@@ -2114,7 +2118,8 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
         Logger.log(`SYNC: New image data explicitly provided for SYNC operation for ${outfitDataFromClient.outfitName}. Saving to Drive...`);
         const savedImgId = saveImageToDrive(outfitDataFromClient.imageData, outfitDataFromClient.originalCollectionName);
         if (savedImgId) {
-            imageIdToPropagate = savedImgId; // Override with newly uploaded image for sync
+            imageIdToPropagate = savedImgId;
+            // Override with newly uploaded image for sync
             Logger.log(`SYNC: New image for sync saved with ID: ${imageIdToPropagate}. This will be propagated.`);
         } else {
             Logger.log(`SYNC: WARN - Failed to save new image explicitly provided for sync of ${outfitDataFromClient.outfitName}.`);
@@ -2133,7 +2138,6 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
     const inventoryHeaders = inventorySheetData[0];
     const headerMap = {};
     inventoryHeaders.forEach((h, i) => { if(h) headerMap[h.toString().trim()] = i; });
-
     // Validate essential headers
     const essentialHeadersForSync = [
         INV_HEADERS.COLLECTION, INV_HEADERS.OUTFIT_NAME, INV_HEADERS.IMAGE_URL, INV_HEADERS.IS_ACTIVE,
@@ -2152,16 +2156,15 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
 
     const newInventorySheetRows = [inventoryHeaders];
     const collectionsWhereOutfitWasRebuilt = new Set();
-
     // Iterate through existing inventory to rebuild or preserve rows
     for (let i = 1; i < inventorySheetData.length; i++) {
       const currentRow = inventorySheetData[i];
       const currentRowCollectionName = currentRow[headerMap[INV_HEADERS.COLLECTION]];
       const currentRowOutfitName = currentRow[headerMap[INV_HEADERS.OUTFIT_NAME]];
       const currentRowImageUrl = currentRow[headerMap[INV_HEADERS.IMAGE_URL]] || "";
-
       if (currentRowOutfitName === outfitDataFromClient.outfitName && activeCollectionNames.includes(currentRowCollectionName)) {
-        // This is an instance of the target outfit in an ACTIVE collection. It needs to be rebuilt.
+        // This is an instance of the target outfit in an ACTIVE collection.
+        // It needs to be rebuilt.
         if (!collectionsWhereOutfitWasRebuilt.has(currentRowCollectionName)) {
           // Only rebuild once per collection.
           Logger.log(`SYNC: Rebuilding outfit "${outfitDataFromClient.outfitName}" in ACTIVE collection "${currentRowCollectionName}".`);
@@ -2180,7 +2183,7 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
             newRow[headerMap[INV_HEADERS.PROD_SKU]] = pieceData.sku || "";
             newRow[headerMap[INV_HEADERS.COLOR]] = pieceData.color || "";
             let etaValue = pieceData.eta || "";
-            if (etaValue && typeof etaValue === 'string' && etaValue.match(/^\d{4}-\d{2}-\d{2}$/)) { // Basic YYYY-MM-DD check
+            if (etaValue && typeof etaValue === 'string' && etaValue.match(/^\d{4}-\d{2}-\d{2}$/)) { // Basic yyyy-MM-DD check
                 try { etaValue = new Date(etaValue); } catch(e) { /* keep as string if parse fails */ }
             }
             newRow[headerMap[INV_HEADERS.ETA]] = etaValue;
@@ -2195,24 +2198,26 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
         }
         // Do not add the original rows for this outfit in this active collection to newInventorySheetRows, as they are replaced.
       } else {
-        // This row is for a different outfit OR for the target outfit in an INACTIVE collection. Keep it as is.
+        // This row is for a different outfit OR for the target outfit in an INACTIVE collection.
+        // Keep it as is.
         newInventorySheetRows.push(currentRow);
       }
     }
     
     const outfitsSyncedCount = collectionsWhereOutfitWasRebuilt.size;
-
     if (outfitsSyncedCount > 0) {
-        inventorySheet.clearContents(); // Clear existing content including headers
+        inventorySheet.clearContents();
+        // Clear existing content including headers
         inventorySheet.getRange(1, 1, newInventorySheetRows.length, newInventorySheetRows[0].length).setValues(newInventorySheetRows);
         SpreadsheetApp.flush();
         Logger.log(`SYNC: Successfully wrote ${newInventorySheetRows.length -1} total rows back to inventory sheet after sync.`);
     } else {
         Logger.log(`SYNC: No active collections found containing the outfit "${outfitDataFromClient.outfitName}" to sync updates to (beyond potentially the original collection if it was active).`);
-         // If the original collection was active and processed, outfitsSyncedCount would be at least 1.
+        // If the original collection was active and processed, outfitsSyncedCount would be at least 1.
          // If outfitsSyncedCount is 0, it means the original collection was not active, or no other active collections had the outfit.
          // The primary update for the original collection is handled by `updateInventoryItems`.
-         // This sync function's main job is propagation. If no propagation targets, it's fine.
+         // This sync function's main job is propagation.
+         // If no propagation targets, it's fine.
     }
 
     logActivity("OUTFIT_SYNC_ACROSS_COLLECTIONS", `Synced outfit: ${outfitDataFromClient.outfitName}`, {
@@ -2225,9 +2230,7 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
       propagatedImageId: imageIdToPropagate,
       canonicalPieceCount: outfitDataFromClient.pieces.length
     });
-
     return { success: true, message: `Outfit '${outfitDataFromClient.outfitName}' changes propagated to ${outfitsSyncedCount} active collection(s).` };
-
   } catch (e) {
     logError('syncOutfitAcrossActiveCollections', `Error syncing outfit ${outfitDataFromClient.outfitName}: ${e.message}`, e.stack);
     return { success: false, message: `Error syncing outfit: ${e.message}` };
@@ -2341,7 +2344,7 @@ function getDashboardStats(collectionNamesArray) {
                 continue;
               }
               colIndices[key] = actualIndex;
-        }
+         }
          if (colIndices.COLLECTION_NAME === undefined || colIndices.FULFILLMENT_STATUS === undefined) {
              throw new Error("Critical column indices (COLLECTION_NAME or FULFILLMENT_STATUS) could not be determined. Dashboard stats cannot be calculated.");
          }
@@ -2360,6 +2363,7 @@ function getDashboardStats(collectionNamesArray) {
             if (collectionNamesArray.includes(r[colIndices.COLLECTION_NAME])) {
                 stats.totalOrders++;
                 const currentStatus = r[colIndices.FULFILLMENT_STATUS] || 'Unknown';
+    
                 const currentOwner = colIndices.OWNER !== undefined && r[colIndices.OWNER] ? r[colIndices.OWNER].toString().trim() : 'Unassigned';
                 const isPlacedInBond = currentStatus === 'Fulfilled' || currentStatus === 'Resolved';
                 const isPending = currentStatus === 'Pending';
@@ -2388,7 +2392,7 @@ function getDashboardStats(collectionNamesArray) {
                         }
                     }
                 }
-            
+                
                 if (colIndices.ORDER_ISSUE !== undefined) {
                     const orderIssue = r[colIndices.ORDER_ISSUE];
                     if (orderIssue && orderIssue.toString().trim() !== "") {
@@ -2494,7 +2498,7 @@ function batchAddProductsFromUpload(fileContentString) {
           let newSheetRow = new Array(productsSheetHeaders.length).fill("");
           newSheetRow[nameColSheetIdx] = productName;
           newSheetRow[catColSheetIdx] = category;
-          
+        
           productsToActuallyAdd.push(newSheetRow);
           existingProductNamesLower.add(productName.toLowerCase());
         } else {
@@ -2516,9 +2520,8 @@ function batchAddProductsFromUpload(fileContentString) {
 
     return {
       success: true,
-      message: `${newProductsAddedCount} new product(s) added. ${duplicatesIgnoredCount} duplicate(s) ignored.`
+      message: `${newProductsAddedCount} new product(s) added.\n${duplicatesIgnoredCount} duplicate(s) ignored.`
     };
-
   } catch (e) {
     logError('batchAddProductsFromUpload', `Error processing uploaded product list: ${e.message}`, e.stack);
     logActivity("PRODUCT_BATCH_ADD_ERROR", `Error processing product list: ${e.message}`);
@@ -2559,11 +2562,11 @@ function addNewProduct(productData) {
        Logger.log(`Added product to Active SS: ${productName}, Category: ${category}.`);
        logActivity("PRODUCT_ADD_SUCCESS", `Added product: ${productName}`, {productName, category});
        return { success: true, message: `Product "${productName}" added to Active SS.` };
-    } catch (e) {
+   } catch (e) {
     logError('addNewProduct', `Error adding ${productName} to Active SS: ${e.message}`, e.stack);
     logActivity("PRODUCT_ADD_ERROR", `Error adding product: ${productName}`, {productName, category, error: e.message});
     return { success: false, message: `Error: ${e.message}` };
-    }
+   }
 }
 
 function updateProductCategory(productData) {
@@ -2600,10 +2603,10 @@ function updateProductCategory(productData) {
              const conflict = data.slice(1).find((r, idx) => idx !== (foundRowIndex-1) &&
                                               r.length > nameCol &&
                                               r[nameCol]?.toString().toLowerCase() === newProductName.toLowerCase());
-            if (conflict) {
+             if (conflict) {
                 logActivity("PRODUCT_UPDATE_FAIL", `New product name conflicts: ${newProductName}`, {originalName, newProductName, newCategory});
                 return { success: false, message: `New product name "${newProductName}" already exists.` };
-            }
+             }
         }
 
         const sheetRowToUpdate = foundRowIndex + 1;
@@ -2626,11 +2629,11 @@ function updateProductCategory(productData) {
         }
         logActivity("PRODUCT_UPDATE_NO_CHANGE", `No changes for product ${originalName}`, {originalName, newProductName, newCategory});
         return { success: true, message: "No changes detected for product." };
-    } catch (e) {
+   } catch (e) {
        logError('updateProductCategory', `Error updating ${originalName} in Active SS: ${e.message}`, e.stack);
        logActivity("PRODUCT_UPDATE_ERROR", `Error updating product ${originalName}`, {originalName, newProductName, newCategory, error: e.message});
        return { success: false, message: `Error: ${e.message}` };
-    }
+   }
 }
 
 function getCollectionsList() {
@@ -2737,10 +2740,10 @@ function updateCollection(collectionData) {
              const conflict = data.slice(1).find((r, idx) => idx !== (foundRowIndex-1) &&
                                               r.length > nameCol &&
                                               r[nameCol]?.toString().toLowerCase() === newName.toLowerCase());
-            if (conflict) {
+             if (conflict) {
                 logActivity("COLLECTION_UPDATE_FAIL", `New collection name conflicts: ${newName}`, {originalName, newName, promoCode, isActive});
                 return { success: false, message: `New name "${newName}" already exists.` };
-            }
+             }
         }
 
         const sheetRowToUpdate = foundRowIndex + 1;
@@ -2942,9 +2945,9 @@ function archiveCollection(collectionNameToArchive) {
         Logger.log(`Deleted collection "${collectionNameToArchive}" from Active Collections sheet.`);
 
         SpreadsheetApp.flush();
-        logError('archiveCollection', `Successfully archived collection: ${collectionNameToArchive}`, 'INFO'); // Using logError with INFO type
+        logError('archiveCollection', `Successfully archived collection: ${collectionNameToArchive}`, 'INFO');
+        // Using logError with INFO type
         logActivity("COLLECTION_ARCHIVE_SUCCESS", `Archived collection: ${collectionNameToArchive}`, {ordersCopied: ordersToMove.length, inventoryCopied: inventoryToMove.length});
-
         scriptCache.remove('activeCollections_activeSS');
         scriptCache.remove('allCollections_activeSS');
         return { success: true, message: `Collection "${collectionNameToArchive}" has been successfully archived.` };
@@ -2967,7 +2970,8 @@ function archiveCollection(collectionNameToArchive) {
 }
 
 function generateCsvData(collectionName, filters = {}) {
-   if (!ordersSheet) { return "Error: Orders sheet (Active SS) not found."; }
+   if (!ordersSheet) { return "Error: Orders sheet (Active SS) not found.";
+   }
    Logger.log(`Generating CSV from Active SS for: ${collectionName}, Filters: ${JSON.stringify(filters)}`);
    try {
        const result = getFilteredOrders(collectionName, filters, 1, 1000000);
@@ -3022,7 +3026,7 @@ function generateImportCsvData(collectionName, filters = {}) {
                  email,
                  outfitOrdered
             ];
-            csvString += row.map(value => {
+             csvString += row.map(value => {
                 let cell = value.toString();
                 if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
                     cell = `"${cell.replace(/"/g, '""')}"`;
@@ -3098,7 +3102,8 @@ function uploadRawDataToSheet(fileContent, fileName) {
             SpreadsheetApp.flush();
             Logger.log(`Successfully wrote ${numRowsToWrite} data rows from ${fileName} to RawImport sheet (Active SS).`);
             logActivity("RAW_UPLOAD_SUCCESS", `Uploaded ${numRowsToWrite} rows from ${fileName}`, {fileName, rows: numRowsToWrite});
-            return { success: true, message: `Successfully uploaded ${numRowsToWrite} data rows from "${fileName}" to RawImport sheet (Active SS). Ready to process.` };
+            return { success: true, message: `Successfully uploaded ${numRowsToWrite} data rows from "${fileName}" to RawImport sheet (Active SS).
+Ready to process.` };
         } else {
             logActivity("RAW_UPLOAD_NO_WRITE", `No data rows to write from ${fileName} after processing`);
             return { success: true, message: `No data rows to write from "${fileName}" after processing.` };
@@ -3109,3 +3114,83 @@ function uploadRawDataToSheet(fileContent, fileName) {
         return { success: false, message: `Error processing file "${fileName}" for Active SS: ${e.message}` };
     }
 }
+
+
+// ***** START: REVISED FUNCTIONS FOR PRESENTATION WEB APP *****
+
+// REMOVE the old getAiInsights function and REPLACE it with this new one.
+function getAiInsight(stats, collectionNames, insightType) {
+  const prompt = buildPromptFor(stats, collectionNames, insightType);
+  if (!prompt) {
+    throw new Error("Invalid insight type requested.");
+  }
+  
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) {
+    throw new Error("Gemini API key is not set. Please run setGeminiApiKey() first.");
+  }
+  
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    muteHttpExceptions: true
+  };
+
+  const response = UrlFetchApp.fetch(url, options);
+  const responseBody = response.getContentText();
+  
+  if (response.getResponseCode() !== 200) {
+    Logger.log("Gemini API Error Response: " + responseBody);
+    throw new Error("Failed to get insights from AI. Response Code: " + response.getResponseCode());
+  }
+
+  const jsonResponse = JSON.parse(responseBody);
+  const generatedText = jsonResponse.candidates[0].content.parts[0].text;
+  return generatedText;
+}
+
+// Helper function to build specific prompts for Gemini
+function buildPromptFor(stats, collectionNames, type) {
+  const baseIntro = `You are a Senior PR & Marketing Analyst at Fabletics, reporting to the Senior VP of PR. Your tone is professional, insightful, and concise. The data is for the campaign(s): "${collectionNames.join(', ')}".\n\nDATA:\n${JSON.stringify(stats, null, 2)}\n\nTASK:\n`;
+
+  switch (type) {
+    case 'ExecutiveSummary':
+      return baseIntro + "Provide a 1-2 sentence executive summary based on the key numbers. Focus on the overall story the numbers tell.";
+    case 'ProductAnalysis':
+      return baseIntro + "Provide a 2-3 sentence analysis of the product performance. What is the relationship between 'Most Requested' and 'Most Shipped'? What does this tell us about our product appeal and inventory alignment?";
+    case 'OperationalSuggestions':
+      return baseIntro + "Based on team performance and top issues, provide 2-3 sentences suggesting areas for operational improvement. Be constructive and data-driven.";
+    case 'NextSteps':
+        return baseIntro + `Generate a list of key takeaways, including 2 'Successes' and 2 'Opportunities & Action Items', based on all the data. Present the output as a simple text list, like this:
+Successes:
+- Bullet point 1
+- Bullet point 2
+Opportunities & Action Items:
+- Bullet point 1
+- Bullet point 2`;
+    default:
+      return null;
+  }
+}
+
+// Function to upload and save the background image file ID
+function uploadAndSetBgImage(imageData) {
+    if (!isUserAuthorizedForProcessing()) {
+        throw new Error("Unauthorized.");
+    }
+    const fileId = saveImageToDrive(imageData, 'Presentation_Backgrounds');
+    if (fileId) {
+        PropertiesService.getScriptProperties().setProperty('PRESENTATION_BG_ID', fileId);
+        return { success: true, fileId: fileId };
+    }
+    return { success: false, message: "Failed to save image to drive." };
+}
+
+// Function to retrieve the saved background image file ID
+function getBgImage() {
+    return PropertiesService.getScriptProperties().getProperty('PRESENTATION_BG_ID');
+}
+
+// ***** END: REVISED FUNCTIONS *****
