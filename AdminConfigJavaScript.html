@@ -52,10 +52,30 @@
         populateTodaysActiveUsersTable(data.todaysActiveUsers); 
         populateRecentErrorsTable(data.recentErrors);
         populateConfigOptionsTable(data.configOptions);
-        populateDetailedActivityLogTable(data.detailedActivityLog); 
+        populateDetailedActivityLogTable(data.detailedActivityLog);
+        populateCurrentBgImage(data.bgImageFileId);
     }
 
     // --- Populate Table Functions ---
+    function populateCurrentBgImage(bgFileId) {
+        const preview = $('#currentBgPreview');
+        if (bgFileId) {
+            preview.html('<div class="spinner-border spinner-border-sm" role="status"></div>');
+            google.script.run.withSuccessHandler(imgData => {
+                if (imgData && imgData.base64) {
+                    preview.empty().css('background-image', `url(data:${imgData.mimeType};base64,${imgData.base64})`);
+                } else {
+                    preview.css('background-image', 'none').html('<span class="text-muted small">No Image</span>');
+                }
+            }).withFailureHandler(err => {
+                preview.css('background-image', 'none').html('<span class="text-danger small">Error</span>');
+                console.error("BG Preview Error:", err);
+            }).getImageData(bgFileId);
+        } else {
+            preview.css('background-image', 'none').html('<span class="text-muted small">None Set</span>');
+        }
+    }
+    
     function populateActiveUsers15MinTable(users) { 
         const container = $('#activeUsers15MinTableContainer'); container.empty();
         if (!users || users.length === 0) { container.append('<p class="text-muted small font-italic">No users detected as active in the last 15 minutes.</p>'); return; }
@@ -206,6 +226,43 @@
                     })
                     .clearAllKnownCaches();
             }
+        });
+
+        // Presentation BG Uploader
+        $('#saveBgImageBtn').on('click', function() {
+            const file = $('#adminBgImageUpload')[0].files[0];
+            if (!file) {
+                displayAdminMessage("Please select an image file to upload.", "warning");
+                return;
+            }
+
+            $('#bgSpinner').show();
+            $(this).prop('disabled', true);
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                const imageData = {
+                    base64Data: e.target.result,
+                    mimeType: file.type,
+                    fileName: 'presentation-background-' + Date.now()
+                };
+                google.script.run.withSuccessHandler(res => {
+                    $('#bgSpinner').hide();
+                    $('#saveBgImageBtn').prop('disabled', false);
+                    $('#adminBgImageUpload').val(''); // Clear file input
+                    if (res.success) {
+                        displayAdminMessage("Background image updated successfully!", "success");
+                        populateCurrentBgImage(res.fileId);
+                    } else {
+                        displayAdminMessage(res.message || "Failed to save image.", "danger");
+                    }
+                }).withFailureHandler(err => {
+                    onAdminFailure(err);
+                    $('#bgSpinner').hide();
+                    $('#saveBgImageBtn').prop('disabled', false);
+                }).uploadAndSetBgImage(imageData);
+            };
+            reader.readAsDataURL(file);
         });
         
         // Config Option Form
