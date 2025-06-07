@@ -1,0 +1,212 @@
+<script>
+    // Global state variable to hold the fetched stats
+    let currentStats = null;
+    let currentCollectionNames = [];
+
+    $(document).ready(function() {
+        // Initialize the collection selector
+        google.script.run.withSuccessHandler(onCollectionsLoaded)
+            .withFailureHandler(handleError)
+            .getCollectionsList();
+        
+        // Check for authorization to show bg image upload
+        google.script.run.withSuccessHandler(isAuthorized => {
+            if (isAuthorized) { $('#bgUploadContainer').show(); }
+        }).withFailureHandler(handleError).isUserAuthorizedForProcessing();
+        
+        // Load any existing background image
+        google.script.run.withSuccessHandler(bgFileId => {
+            if (bgFileId) { setBackground(bgFileId); }
+        }).withFailureHandler(handleError).getBgImage();
+
+        // Set listeners for buttons
+        $('#loadDataBtn').on('click', loadData);
+        $('#downloadPdfBtn').on('click', downloadAsPdf);
+        $('#bgImageUpload').on('change', handleBgImageUpload);
+
+        // Listeners for granular AI buttons
+        $('#generateExecSummaryBtn').on('click', () => generateAiInsight('ExecutiveSummary', '#aiExecSummary'));
+        $('#analyzeProductBtn').on('click', () => generateAiInsight('ProductAnalysis', '#aiProductAnalysis'));
+        $('#suggestImprovementsBtn').on('click', () => generateAiInsight('OperationalSuggestions', '#aiOperationalSuggestions'));
+        $('#brainstormNextStepsBtn').on('click', () => generateAiInsight('NextSteps', '#aiNextSteps'));
+    });
+
+    function onCollectionsLoaded(collections) {
+        const select = $('#collectionSelectPres');
+        if (collections && collections.length > 0) {
+            const active = collections.filter(c => c.isActive).sort((a,b) => a.name.localeCompare(b.name));
+            const inactive = collections.filter(c => !c.isActive).sort((a,b) => a.name.localeCompare(b.name));
+            if (active.length > 0) {
+                const activeGroup = $('<optgroup label="Active Collections"></optgroup>');
+                active.forEach(c => activeGroup.append($('<option>', { value: c.name, text: c.name })));
+                select.append(activeGroup);
+            }
+            if (inactive.length > 0) {
+                const inactiveGroup = $('<optgroup label="Inactive/Archived Collections"></optgroup>');
+                inactive.forEach(c => inactiveGroup.append($('<option>', { value: c.name, text: c.name })));
+                select.append(inactiveGroup);
+            }
+        }
+        select.selectpicker('refresh');
+    }
+
+    function loadData() {
+        const selectedCollections = $('#collectionSelectPres').val();
+        if (!selectedCollections || selectedCollections.length === 0) {
+            alert("Please select at least one collection.");
+            return;
+        }
+
+        $('#loadingOverlay').show();
+        $('#presentation-content').hide();
+        resetPresentation();
+        currentCollectionNames = selectedCollections;
+
+        google.script.run
+            .withSuccessHandler(onStatsReceived)
+            .withFailureHandler(handleError)
+            .getDashboardStats(selectedCollections);
+    }
+
+    function onStatsReceived(stats) {
+        if (stats.error) {
+            handleError({ message: stats.error });
+            return;
+        }
+        currentStats = stats; // Store stats globally
+
+        // Populate all data fields
+        const totalOrders = stats.totalOrders || 0;
+        const fulfilledOrResolved = (stats.statusCounts['Fulfilled'] || 0) + (stats.statusCounts['Resolved'] || 0);
+        const fulfillmentRate = totalOrders > 0 ? Math.round((fulfilledOrResolved / totalOrders) * 100) : 0;
+        const totalFirstChoiceRequests = Object.values(stats.pref1OutfitCounts || {}).reduce((a, b) => a + b, 0);
+        const totalFirstChoiceFills = Object.values(stats.firstChoiceCounts || {}).reduce((a, b) => a + b, 0);
+        const firstChoiceRate = totalFirstChoiceRequests > 0 ? Math.round((totalFirstChoiceFills / totalFirstChoiceRequests) * 100) : 0;
+        
+        $('#kpiTotalOrders').text(totalOrders);
+        $('#kpiFulfillmentRate').text(fulfillmentRate + '%');
+        $('#kpiFirstChoiceRate').text(firstChoiceRate + '%');
+
+        const topRequested = Object.entries(stats.pref1OutfitCounts || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const topShipped = Object.entries(stats.placedOutfitCounts || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        populateList('#listMostRequested', topRequested);
+        populateList('#listMostShipped', topShipped);
+
+        const topIssues = Object.entries(stats.issueCounts || {}).sort((a,b) => b[1] - a[1]).slice(0, 5);
+        populateList('#listTopIssues', topIssues);
+        populateTeamTable('#tableTeamPerformance', stats.ownerStats);
+        
+        $('#presentation-content').show();
+        $('#downloadPdfBtn').show();
+        $('#loadingOverlay').hide();
+    }
+    
+    function generateAiInsight(type, targetSelector) {
+        if (!currentStats) {
+            alert("Please load data before generating insights.");
+            return;
+        }
+        const aiContainer = $(targetSelector);
+        aiContainer.show().html('<div class="spinner-border spinner-border-sm" role="status"></div>');
+
+        google.script.run
+            .withSuccessHandler(response => {
+                aiContainer.html(response.replace(/\n/g, '<br>'));
+            })
+            .withFailureHandler(error => {
+                aiContainer.html(`<span class="text-danger">AI insight generation failed: ${error.message}</span>`);
+            })
+            .getAiInsight(currentStats, currentCollectionNames, type);
+    }
+    
+    function populateList(selector, data) {
+        const container = $(selector);
+        container.empty();
+        if (data && data.length > 0) {
+            data.forEach(([name, count]) => {
+                container.append(`<li><span class="list-item-name">${escapeHtml(name)}</span> <span class="list-item-count">${count}</span></li>`);
+            });
+        } else {
+            container.append('<li class="text-muted">No data available.</li>');
+        }
+    }
+
+    function populateTeamTable(selector, ownerStats) {
+        const container = $(selector);
+        container.empty();
+        if (ownerStats && Object.keys(ownerStats).length > 0) {
+            let table = '<table class="team-table"><tbody>';
+            const sortedOwners = Object.entries(ownerStats).sort(([, a], [, b]) => b.total - a.total);
+            sortedOwners.forEach(([owner, data]) => {
+                table += `<tr><td>${escapeHtml(owner)}</td><td class="text-right completion-rate">${data.completionPercent || 0}%</td></tr>`;
+            });
+            table += '</tbody></table>';
+            container.html(table);
+        } else {
+            container.html('<p class="text-muted text-center">No owner data available.</p>');
+        }
+    }
+
+    function handleBgImageUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        $('#loadingOverlay').show();
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            // Apply background instantly for better UX
+            $('#backgroundOverlay').css('background-image', `url(${e.target.result})`);
+            
+            // Send to server to save for future sessions
+            const imageData = {
+                base64Data: e.target.result,
+                mimeType: file.type,
+                fileName: 'presentation-background-' + Date.now()
+            };
+            google.script.run.withSuccessHandler(() => {
+                $('#loadingOverlay').hide();
+                alert("Background image updated.");
+            }).withFailureHandler(handleError).uploadAndSetBgImage(imageData);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function setBackground(fileId) {
+        google.script.run.withSuccessHandler(imgData => {
+            if (imgData && imgData.base64) {
+                $('#backgroundOverlay').css('background-image', `url(data:${imgData.mimeType};base64,${imgData.base64})`);
+            }
+        }).withFailureHandler(handleError).getImageData(fileId);
+    }
+    
+    function downloadAsPdf() {
+        const element = document.getElementById('presentation-content');
+        const opt = {
+          margin:       0.5,
+          filename:     `Fabletics_Performance_Report_${new Date().toISOString().slice(0,10)}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true },
+          jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
+        };
+        html2pdf().from(element).set(opt).save();
+    }
+
+    function resetPresentation() {
+        currentStats = null;
+        $('.kpi-card-value').text('--');
+        $('.styled-list, #tableTeamPerformance, .ai-response').empty();
+        $('.ai-response').hide();
+    }
+
+    function handleError(error) {
+        $('#loadingOverlay').hide();
+        console.error('An error occurred:', error);
+        alert('An error occurred: ' + error.message);
+    }
+
+    function escapeHtml(unsafe) {
+        if (unsafe === null || typeof unsafe === 'undefined') return '';
+        return unsafe.toString()
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+</script>
