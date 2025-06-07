@@ -24,10 +24,10 @@
    .table .badge { padding: 0.4em 0.6em; font-size: 0.85em; }
    .status-fulfilled { background-color: #28a745; color: white; } /* Green */
    .status-resolved { background-color: #17a2b8; color: white; } /* Info Blue/Teal */
-   .status-pending { /* JavaScript will generate status-pending */
+   .status-pending { 
+       background-color: #ffc107; /* Bootstrap Warning Yellow */
+       color: #212529; /* Dark text for contrast */
        font-weight: bold;
-       /* color: #ffc107; */ /* Example if you want a specific text color for pending */
-       /* background-color: transparent; */ /* Explicitly if needed, though default badge might be fine */
    }
    .status-needs-review, .status-check-zip-code { background-color: #dc3545; color: white; } /* Red - JS will make status-needs-review */
    .status-on-hold { background-color: #ffc107; color: #212529; font-weight: bold; } /* Yellow - JS will make status-on-hold */
@@ -389,6 +389,83 @@
       color: red;
       font-weight: bold;
       display: inline-block; 
+    }
+
+    /* === STYLES FOR PR & PERFORMANCE DASHBOARD === */
+
+    /* KPI Card Styles */
+    .kpi-card {
+        border: none;
+        border-left: 5px solid #6f42c1; /* Fabletics Purple */
+        box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+        text-align: center;
+        padding: 1.5rem 1rem;
+        height: 100%;
+    }
+
+    .kpi-card .kpi-value {
+        font-size: 3rem;
+        font-weight: bold;
+        color: #343a40;
+        line-height: 1.1;
+    }
+
+    .kpi-card .kpi-label {
+        font-size: 1rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    .kpi-card .kpi-sparkline {
+        /* Placeholder for potential future charts */
+        height: 40px;
+        margin-top: 10px;
+    }
+
+    /* Section Header Styles */
+    .dashboard-section-header {
+        margin-top: 2rem;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        color: #495057;
+        font-weight: 400;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 10px;
+    }
+
+    /* Custom List Group for "The Hits" */
+    .hits-list .list-group-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .75rem 1rem;
+        font-size: 1rem;
+        border-color: #e9ecef;
+    }
+
+    .hits-list .list-group-item .outfit-name {
+        font-weight: 500;
+    }
+
+    .hits-list .list-group-item .badge-purple {
+        background-color: #6f42c1;
+        color: #fff;
+    }
+
+    .hits-list .list-group-item .badge-light {
+        font-weight: 600;
+        font-size: 1rem;
+        color: #495057;
+        background-color: #e9ecef;
+        min-width: 40px;
+        text-align: center;
+    }
+
+    /* Owner stats table adjustments */
+    #statOwnerStatsDetailedStatsPage .progress {
+        height: 20px;
+        font-size: 0.8rem;
+        background-color: #e9ecef;
     }
 
 </style>
