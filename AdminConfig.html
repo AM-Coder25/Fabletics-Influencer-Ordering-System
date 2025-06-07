@@ -53,6 +53,33 @@
         </div>
     </div>
 
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header card-header-custom"><i class="fas fa-image mr-2"></i>Presentation Background Management</div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-3 text-center">
+                            <strong>Current Background:</strong>
+                            <div id="currentBgPreview" class="mt-2 border rounded" style="width: 150px; height: 80px; background-size: cover; background-position: center; background-color: #f8f9fa; margin: auto;">
+                                <span class="text-muted small">Loading...</span>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="text-muted small">Upload a new background image for the 'PR & Performance' presentation page. The new image will replace the current one.</p>
+                            <div class="form-group">
+                                <label for="adminBgImageUpload">Upload New Image:</label>
+                                <input type="file" class="form-control-file" id="adminBgImageUpload" accept="image/*">
+                            </div>
+                            <button id="saveBgImageBtn" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> Save New Background</button>
+                            <span id="bgSpinner" class="spinner-border spinner-border-sm ml-2" style="display: none;" role="status"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-lg-4">
             <div class="card mb-3 shadow-sm">
