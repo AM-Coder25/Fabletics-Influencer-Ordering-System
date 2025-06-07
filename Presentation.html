@@ -41,7 +41,6 @@
         flex-direction: column;
       }
       .data-card-title { font-weight: 600; color: #4a5568; margin-bottom: 15px; display:flex; align-items:center; }
-      .data-card-title i { margin-right: 8px; color: #718096; }
       .ai-button {
         background: linear-gradient(90deg, #8A2BE2 0%, #FF69B4 100%);
         color: white;
@@ -57,19 +56,29 @@
       .ai-button i { margin-right: 8px; }
       .ai-response { margin-top: 15px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #8A2BE2; min-height: 50px;}
 
+      /* --- UPDATED STYLES START HERE --- */
+
       /* KPI Cards */
       .kpi-card { text-align: center; padding: 20px; }
-      .kpi-card-icon { font-size: 2rem; color: #FF69B4; margin-bottom: 10px; }
+      /* The generic pink color has been REMOVED from this rule */
+      .kpi-card-icon { font-size: 2rem; margin-bottom: 10px; }
       .kpi-card-value { font-size: 2.8rem; font-weight: 700; color: #1a202c; line-height: 1.1; }
       .kpi-card-label { font-size: 0.9rem; color: #718096; }
 
-      /* Icon Color Classes */
-      .icon-color-1 { color: #6f42c1; } /* Fabletics Purple */
-      .icon-color-2 { color: #00c9a7; } /* Vibrant Teal */
-      .icon-color-3 { color: #ff69b4; } /* The original Hot Pink */
-      .data-card-title .icon-color-1, .data-card-title .icon-color-2, .data-card-title .icon-color-3 {
-          opacity: 0.85;
+      /* Icon Color Classes (for lower section cards) */
+      .data-card-title i {
+        margin-right: 8px;
       }
+      .data-card-title .icon-color-1 { color: #6f42c1; } /* Fabletics Purple */
+      .data-card-title .icon-color-2 { color: #00c9a7; } /* Vibrant Teal */
+      .data-card-title .icon-color-3 { color: #ff69b4; } /* Hot Pink */
+      
+      /* NEW rules specifically for the top KPI icons */
+      .kpi-card-icon.icon-color-1 { color: #6f42c1; } /* Fabletics Purple */
+      .kpi-card-icon.icon-color-2 { color: #00c9a7; } /* Vibrant Teal */
+      .kpi-card-icon.icon-color-3 { color: #ff69b4; } /* Hot Pink */
+
+      /* --- UPDATED STYLES END HERE --- */
 
       /* Lists */
       .styled-list { list-style: none; padding-left: 0; flex-grow: 1; }
