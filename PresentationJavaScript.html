@@ -1,7 +1,8 @@
 <script>
-    // Global state variable to hold the fetched stats
+    // Global state variables
     let currentStats = null;
     let currentCollectionNames = [];
+    let outfitDetailsMap = new Map(); // For easy lookup of outfit details
 
     $(document).ready(function() {
         // Initialize the collection selector
@@ -23,6 +24,68 @@
         $('#analyzeProductBtn').on('click', () => generateAiInsight('ProductAnalysis', '#aiProductAnalysis'));
         $('#suggestImprovementsBtn').on('click', () => generateAiInsight('OperationalSuggestions', '#aiOperationalSuggestions'));
         $('#brainstormNextStepsBtn').on('click', () => generateAiInsight('NextSteps', '#aiNextSteps'));
+
+        // Listener for the enhanced outfit "quick view" modal
+        $(document).on('click', '.outfit-image-trigger', function() {
+            const outfitName = $(this).data('outfit-name');
+            const outfit = outfitDetailsMap.get(outfitName);
+
+            if (!outfit) {
+                console.error("Outfit details not found for:", outfitName);
+                alert("Could not retrieve outfit details.");
+                return;
+            }
+
+            // Set modal title and show
+            $('#outfitImageModalLabel').text(outfit.name);
+            const modalBody = $('#outfitImageModalBody');
+            
+            // Re-create the two-column structure every time
+            modalBody.html(`
+                <div class="d-flex flex-column flex-md-row">
+                    <div class="modal-image-container">
+                        <div class="spinner-border text-primary" role="status"><span class="sr-only">Loading...</span></div>
+                    </div>
+                    <div class="modal-details-container">
+                        <h6 class="modal-details-title">Outfit Pieces</h6>
+                        <ul class="modal-pieces-list">
+                        </ul>
+                    </div>
+                </div>
+            `);
+            $('#outfitImageModal').modal('show');
+
+            // --- Populate the Pieces List ---
+            const piecesList = modalBody.find('.modal-pieces-list');
+            if (outfit.pieces && outfit.pieces.length > 0) {
+                // Sort pieces by sequence before displaying for consistency
+                const sortedPieces = outfit.pieces.sort((a, b) => (a.sequence || 999) - (b.sequence || 999));
+                sortedPieces.forEach(piece => {
+                    piecesList.append(`<li><span class="modal-piece-name">${escapeHtml(piece.productName)}</span><span class="modal-piece-sku">SKU: ${escapeHtml(piece.sku)}</span></li>`);
+                });
+            } else {
+                piecesList.html('<li><span class="text-muted">No piece information available.</span></li>');
+            }
+
+            // --- Populate the Image ---
+            const imageContainer = modalBody.find('.modal-image-container');
+            if (outfit.imageUrl) {
+                google.script.run
+                    .withSuccessHandler(function(imgData) {
+                        if (imgData && imgData.base64) {
+                            imageContainer.html(`<img src="data:${imgData.mimeType};base64,${imgData.base64}" alt="${escapeHtml(outfit.name)}">`);
+                        } else {
+                            imageContainer.html('<div class="text-center text-muted p-3"><em>Image data could not be loaded.</em></div>');
+                        }
+                    })
+                    .withFailureHandler(function(error) {
+                         imageContainer.html(`<div class="text-center text-danger p-3"><strong>Error</strong><br>${escapeHtml(error.message)}</div>`);
+                    })
+                    .getImageData(outfit.imageUrl);
+            } else {
+                 imageContainer.html('<div class="text-center text-muted p-3"><em>No Image Available</em></div>');
+            }
+        });
     });
 
     function onCollectionsLoaded(collections) {
@@ -69,6 +132,16 @@
         }
         currentStats = stats; // Store stats globally
 
+        // Create a lookup map for outfit details (image and pieces)
+        outfitDetailsMap.clear();
+        (stats.topRequested || []).forEach(item => outfitDetailsMap.set(item.name, item));
+        (stats.topShipped || []).forEach(item => {
+            // Add to map if it doesn't exist, ensuring we have details for all top outfits
+            if (!outfitDetailsMap.has(item.name)) {
+                outfitDetailsMap.set(item.name, item);
+            }
+        });
+
         // Populate all data fields
         const totalOrders = stats.totalOrders || 0;
         const fulfilledOrResolved = (stats.statusCounts['Fulfilled'] || 0) + (stats.statusCounts['Resolved'] || 0);
@@ -81,10 +154,8 @@
         $('#kpiFulfillmentRate').text(fulfillmentRate + '%');
         $('#kpiFirstChoiceRate').text(firstChoiceRate + '%');
 
-        const topRequested = Object.entries(stats.pref1OutfitCounts || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
-        const topShipped = Object.entries(stats.placedOutfitCounts || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
-        populateList('#listMostRequested', topRequested);
-        populateList('#listMostShipped', topShipped);
+        populateList('#listMostRequested', stats.topRequested);
+        populateList('#listMostShipped', stats.topShipped);
 
         const topIssues = Object.entries(stats.issueCounts || {}).sort((a,b) => b[1] - a[1]).slice(0, 5);
         populateList('#listTopIssues', topIssues);
@@ -117,8 +188,30 @@
         const container = $(selector);
         container.empty();
         if (data && data.length > 0) {
-            data.forEach(([name, count]) => {
-                container.append(`<li><span class="list-item-name">${escapeHtml(name)}</span> <span class="list-item-count">${count}</span></li>`);
+            data.forEach(item => {
+                let name, count, imageUrl;
+
+                // CORRECTED LOGIC: Check if the item is an array or an object
+                if (Array.isArray(item)) {
+                    // This handles the data for 'Top Fulfillment Issues' (e.g., ['Issue Name', 10])
+                    name = item[0];
+                    count = item[1];
+                    imageUrl = null; 
+                } else {
+                    // This handles the data for 'Most Requested' and 'Most Shipped' (e.g., {name: 'Outfit #1', count: 15, ...})
+                    name = item.name;
+                    count = item.count;
+                    imageUrl = item.imageUrl;
+                }
+
+                let imageTriggerHtml = '';
+                // Only show the magnifying glass icon if an imageUrl exists
+                if (imageUrl) {
+                    imageTriggerHtml = `<i class="fas fa-search outfit-image-trigger" data-image-id="${escapeHtml(imageUrl)}" data-outfit-name="${escapeHtml(name)}" title="View Image for ${escapeHtml(name)}"></i>`;
+                }
+                
+                // This part remains the same, but now with the correct 'name' and 'count' variables
+                container.append(`<li>${imageTriggerHtml}<span class="list-item-name">${escapeHtml(name)}</span> <span class="list-item-count">${count}</span></li>`);
             });
         } else {
             container.append('<li class="text-muted">No data available.</li>');
