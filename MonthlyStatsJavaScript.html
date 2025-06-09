@@ -183,10 +183,10 @@
 
         // Section 2: The Hits
         content.append('<h2 class="dashboard-section-header">Product & Outfit Insights: What\'s Hot?</h2>');
-        const topRequested = Object.entries(stats.pref1OutfitCounts || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
-        const topPlaced = Object.entries(stats.placedOutfitCounts || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const topRequested = Object.entries(stats.pref1OutfitCounts || {}).sort((a, b) => b[1] - a[1]);
+        const topPlaced = Object.entries(stats.placedOutfitCounts || {}).sort((a, b) => b[1] - a[1]);
 
-        let hitsHtml = '<div class="row"><div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title text-center">Most Requested</h5><p class="text-center text-muted small">Top 10 outfits from influencers\' first preference.</p><ul class="list-group list-group-flush hits-list">';
+        let hitsHtml = '<div class="row"><div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title text-center">Most Requested</h5><p class="text-center text-muted small">All outfits from influencers\' first preference, sorted by popularity.</p><ul class="list-group list-group-flush hits-list">';
         if (topRequested.length > 0) {
             topRequested.forEach(([name, count]) => {
                 hitsHtml += `<li class="list-group-item"><span class="outfit-name">${escapeHtml(name)}</span> <span class="badge badge-purple badge-pill">${count}</span></li>`;
@@ -196,7 +196,7 @@
         }
         hitsHtml += '</ul></div></div></div>';
 
-        hitsHtml += '<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title text-center">Most Shipped</h5><p class="text-center text-muted small">Top 10 outfits successfully placed & shipped.</p><ul class="list-group list-group-flush hits-list">';
+        hitsHtml += '<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title text-center">Most Shipped</h5><p class="text-center text-muted small">All outfits successfully placed & shipped, sorted by popularity.</p><ul class="list-group list-group-flush hits-list">';
         if (topPlaced.length > 0) {
             topPlaced.forEach(([name, count]) => {
                 hitsHtml += `<li class="list-group-item"><span class="outfit-name">${escapeHtml(name)}</span> <span class="badge badge-success badge-pill">${count}</span></li>`;
@@ -259,14 +259,14 @@
                 </div>
                 <div class="col-md-4 mb-3">
                     <div class="card"><div class="card-body">
-                        <h5 class="card-title text-center">Top 10 First-Choice Conversions</h5>
+                        <h5 class="card-title text-center">First-Choice Conversions</h5>
                          <p class="text-center text-muted small">Requested outfits successfully shipped as first choice.</p>
                         <div id="fullFirstChoiceList"></div>
                     </div></div>
                 </div>
                 <div class="col-md-4 mb-3">
                     <div class="card"><div class="card-body">
-                        <h5 class="card-title text-center">Top 10 Assigned Outfits</h5>
+                        <h5 class="card-title text-center">Assigned Outfits</h5>
                          <p class="text-center text-muted small">Outfits assigned in the 'Outfit Ordered' field, all statuses.</p>
                         <div id="fullAssignedOutfitList"></div>
                     </div></div>
@@ -297,7 +297,7 @@
         const fullFcList = $('#fullFirstChoiceList');
         if (stats.firstChoiceCounts && Object.keys(stats.firstChoiceCounts).length > 0) {
             let listHtml = '<ul class="list-group list-group-flush hits-list">';
-            const sortedFc = Object.entries(stats.firstChoiceCounts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+            const sortedFc = Object.entries(stats.firstChoiceCounts).sort((a,b) => b[1] - a[1]);
             sortedFc.forEach(([name, count]) => {
                 listHtml += `<li class="list-group-item">${escapeHtml(name)} <span class="badge badge-success badge-pill">${count}</span></li>`;
             });
@@ -311,7 +311,7 @@
         const fullAssignedList = $('#fullAssignedOutfitList');
         if (stats.outfitCounts && Object.keys(stats.outfitCounts).length > 0) {
             let listHtml = '<ul class="list-group list-group-flush hits-list">';
-            const sortedAssigned = Object.entries(stats.outfitCounts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+            const sortedAssigned = Object.entries(stats.outfitCounts).sort((a,b) => b[1] - a[1]);
             sortedAssigned.forEach(([name, count]) => {
                 listHtml += `<li class="list-group-item">${escapeHtml(name)} <span class="badge badge-info badge-pill">${count}</span></li>`;
             });
