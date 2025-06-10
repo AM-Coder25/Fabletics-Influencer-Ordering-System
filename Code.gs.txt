@@ -3274,4 +3274,9 @@ function getBgImage() {
     return PropertiesService.getScriptProperties().getProperty('PRESENTATION_BG_ID');
 }
 
+//Function to get Stylesheet.html to be read in the historical part of the embed
+function getStylesheetContent() {
+  return HtmlService.createHtmlOutputFromFile('Stylesheet').getContent();
+}
+
 // ***** END: REVISED FUNCTIONS *****
