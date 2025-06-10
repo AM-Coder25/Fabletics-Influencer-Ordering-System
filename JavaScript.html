@@ -111,6 +111,7 @@
 
     if (isCurrentUserAuthorized) {
         $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #uploadProductListBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').show();
+        $('#omsCostFilterContainer').show();
     } else {
         $('#manageProductsBtn, #manageCollectionsBtn, #uploadRawDataBtn, #uploadProductListBtn, #addNewOutfitBtn, #processRawBtn, #downloadImportCsvBtn').hide();
     }
@@ -240,15 +241,11 @@
     tableBody.empty();
     tableHeadRow.empty();
 
-    let headerHtml = '';
-    if (isCurrentUserAuthorized) {
-        headerHtml += '<th>ID</th>';
-    }
-    headerHtml += '<th>Contact</th> <th>Email</th> <th>Owner</th> <th>Status</th> <th>Date Ordered</th> <th>Outfit Ordered</th> <th>Bond/OMS ID</th> <th>Actions</th>';
+    let headerHtml = '<th>Contact</th> <th>Email</th> <th>Owner</th> <th>Status</th> <th>Date Ordered</th> <th>Outfit Ordered</th> <th>Bond/OMS ID</th> <th>Actions</th>';
     tableHeadRow.html(headerHtml);
 
     if (!orders || orders.length === 0) {
-        const colspan = isCurrentUserAuthorized ? 9 : 8;
+        const colspan = 8;
         tableBody.append(`<tr><td colspan="${colspan}" class="text-center text-muted">No orders found matching the current filters.</td></tr>`);
         return;
     }
@@ -269,9 +266,6 @@
 
 
          let rowHtml = `<tr class="${duplicateClass} ${removedClass} ${missingLastNameClass}" data-order-id="${orderIdEsc}">`;
-         if (isCurrentUserAuthorized) {
-             rowHtml += `<td><small>${orderIdEsc}</small></td>`;
-         }
          rowHtml += `
                 <td>${escapeHtml(order.contact || '')}</td>
                 <td>${escapeHtml(order.email || '')}</td>
@@ -455,7 +449,7 @@
       $('#applyFiltersBtn').off('click').on('click', applyFiltersAndLoad);
       $('#clearFiltersBtn').off('click').on('click', function() { clearFilters(true); });
 
-      $('#filterOwnerSelect, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate').off('change').on('change', applyFiltersAndLoad);
+      $('#filterOwnerSelect, #filterStatus, #filterOrderIssue, #filterNumOutfits, #filterUnavailableNotes, #filterStartDate, #filterEndDate, #filterOmsCost').off('change').on('change', applyFiltersAndLoad);
       
       $('#filterName, #filterEmail').off('keypress').on('keypress', function(e) {
           if (e.which === 13) { 
@@ -754,7 +748,7 @@
     }
     showLoading(`Loading data for ${escapeHtml(collectionName)}...`);
     $('#ordersListTitle span').text(escapeHtml(collectionName));
-    $('#ordersTableBody').empty().html(`<tr><td colspan="${isCurrentUserAuthorized ? 9 : 8}" class="text-center text-muted"><i>Loading orders...</i></td></tr>`);
+    $('#ordersTableBody').empty().html(`<tr><td colspan="8" class="text-center text-muted"><i>Loading orders...</i></td></tr>`);
     $('#paginationControlsTop, #paginationControlsBottom').empty();
     $('#inventoryContent').empty(); 
 
@@ -813,7 +807,7 @@
 
       if (result.error) {
           displayMessage(`Error loading orders: ${escapeHtml(result.error)}`, 'danger');
-          const colspan = isCurrentUserAuthorized ? 9 : 8;
+          const colspan = 8;
           $('#ordersTableBody').empty().html(`<tr><td colspan="${colspan}" class="text-center text-danger">Error loading orders.</td></tr>`);
           totalOrders = 0; 
           if (currentCollectionName && currentCollectionName !== '_all_active_') {
@@ -841,7 +835,7 @@
       isLoadingOrders = false; hideLoading();
       $('#ordersTableBody').css('opacity', 1); 
       onFailure(error); 
-      const colspan = isCurrentUserAuthorized ? 9 : 8;
+      const colspan = 8;
       $('#ordersTableBody').empty().html(`<tr><td colspan="${colspan}" class="text-center text-danger">Error loading orders. Check logs.</td></tr>`);
       totalOrders = 0; renderPaginationControls(); 
   }
@@ -882,6 +876,7 @@
     const endDate = $('#filterEndDate').val();   
     const emailSearch = $('#filterEmail').val().trim();
     const stockFilter = $('input[name="stockFilter"]:checked').val();
+    const omsCost = $('#filterOmsCost').val();
 
     if (owner) filters.owner = owner;
     if (nameSearch) filters.nameSearch = nameSearch;
@@ -889,13 +884,12 @@
     if (orderIssue) filters.orderIssue = orderIssue; 
     if (outfitsRawOriginal) filters.outfitsRawOriginal = outfitsRawOriginal; 
     if (unavailableNotes) filters.unavailableNotes = unavailableNotes;       
-    
     if (startDate) filters.dateRangeStart = startDate; 
     if (endDate) filters.dateRangeEnd = endDate;     
-
     if (emailSearch) filters.emailSearch = emailSearch;
     if (stockFilter) filters.stockFilter = stockFilter;
     if (currentMissingLastNameFilterActive) filters.missingLastName = true;
+    if (omsCost) filters.omsCost = omsCost;
 
     return filters;
   }
@@ -915,7 +909,8 @@
     $('#filterNumOutfits').val('');         
     $('#filterUnavailableNotes').val('');   
     $('#filterStartDate').val(''); 
-    $('#filterEndDate').val('');   
+    $('#filterEndDate').val('');
+    $('#filterOmsCost').val('');
     $('#stockFilterAll').prop('checked', true).parent().addClass('active').siblings().removeClass('active'); 
     
     currentMissingLastNameFilterActive = false; 
@@ -1930,7 +1925,6 @@
             tableHtml += '<th>Actions</th>';
         }
         tableHtml += '</tr></thead><tbody>';
-        products.sort((a, b) => a.productName.localeCompare(b.productName)); 
         products.forEach(p => {
             tableHtml += `<tr><td>${escapeHtml(p.productName)}</td><td>${escapeHtml(p.category)}</td>`;
             if (isCurrentUserAuthorized) {
@@ -1995,7 +1989,6 @@
         let tableHtml = '<table class="table table-sm table-striped table-hover"><thead><tr><th>Name</th><th>Promo Code</th><th>Active</th>';
         if (isCurrentUserAuthorized) { tableHtml += '<th>Actions</th>'; }
         tableHtml += '</tr></thead><tbody>';
-        collections.sort((a, b) => a.name.localeCompare(b.name));
         collections.forEach(c => {
             const activeBadge = c.isActive ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-secondary">No</span>';
             tableHtml += `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.promoCode || '-')}</td><td>${activeBadge}</td>`;
