@@ -62,7 +62,6 @@ if (!rawImportSheet) Logger.log(`CRITICAL ERROR: RawImport sheet not found in FI
 // UPDATED: Warnings for log sheets now refer to the Admin Log spreadsheet context
 if (!errorLogSheet) Logger.log(`WARNING: ErrorLog sheet not found in the Admin Log spreadsheet (ID: ${ADMIN_LOG_SPREADSHEET_ID}). Error logging will fail.`);
 if (!userActivityLogSheet) Logger.log(`WARNING: UserActivityLog sheet not found in the Admin Log spreadsheet (ID: ${ADMIN_LOG_SPREADSHEET_ID}). User activity logging will fail.`);
-
 const scriptCache = CacheService.getScriptCache();
 const CACHE_EXPIRATION_SECONDS = 3600; // 1 hour
 
@@ -118,7 +117,6 @@ const INV_HEADERS = {
   SWAP_SIZES: "SwapAvailableSizes", NOTES: "StockStatusNotes", IS_ACTIVE: "IsActive", 
   OUTFIT_QUICK_NOTE: "OutfitQuickNote" 
 };
-
 // --- Error Logging ---
 function logError(functionName, errorMessage, details = '') {
   if (!errorLogSheet) {
@@ -263,7 +261,8 @@ function getScriptUrl() {
 }
 
 function getImageData(fileId) {
-  if (!fileId) { Logger.log("getImageData: No File ID provided."); return null; }
+  if (!fileId) { Logger.log("getImageData: No File ID provided."); return null;
+  }
   try {
     if (!/^[a-zA-Z0-9_-]+$/.test(fileId)) throw new Error("Invalid File ID format provided.");
     const file = DriveApp.getFileById(fileId);
@@ -300,8 +299,7 @@ function getInitialAppData() {
                 accessoryHat: ACCESSORY_HAT_SIZES,
                 kids: KIDS_SIZES,
                 bottomWInseam: BOTTOM_W_INSEAM_SIZES,
-                bottomInWInseam: 
-                BOTTOM_IN_W_INSEAM_SIZES
+                bottomInWInseam: BOTTOM_IN_W_INSEAM_SIZES
             },
             isAuthorizedProcessor: isAuthorized,
             uniqueOwnerNames: uniqueOwnerNames
@@ -816,7 +814,6 @@ function processRawImportData(collectionNameToAssign) {
         const rawLastRow = rawImportSheet.getLastRow();
         if (rawLastRow > 1) {
           rawImportSheet.getRange(2, 1, rawLastRow - 1, rawImportSheet.getLastColumn()).clearContent();
-          Logger.log(`Cleared ${rawLastRow - 1} rows from RawImport sheet (Active SS) after processing.`);
         }
         logActivity("RAW_IMPORT_SUCCESS", `Processed ${processedOrders.length} orders for ${collectionNameToAssign}`, { collection: collectionNameToAssign, count: processedOrders.length });
         return `Successfully processed ${processedOrders.length} orders for collection "${collectionNameToAssign}" into Active SS and cleared the RawImport sheet (Active SS).`;
@@ -1008,7 +1005,8 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                     filterStartDateObj = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
                     if (isNaN(filterStartDateObj.getTime())) filterStartDateObj = null;
                 }
-            } catch (e) { filterStartDateObj = null; }
+            } catch (e) { filterStartDateObj = null;
+            }
         }
         if (filters.dateRangeEnd) {
             try {
@@ -1017,7 +1015,8 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                     filterEndDateObj = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
                     if (isNaN(filterEndDateObj.getTime())) filterEndDateObj = null;
                 }
-            } catch (e) { filterEndDateObj = null; }
+            } catch (e) { filterEndDateObj = null;
+            }
         }
 
         const emailFilterLower = filters.emailSearch?.toString().toLowerCase().trim();
@@ -1028,7 +1027,6 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
         const unavailableNotesFilter = filters.unavailableNotes?.toString().trim();
         const omsCostFilter = filters.omsCost;
         const missingLastNameFilter = filters.missingLastName === true;
-
         const allValidRows = data.slice(1).filter(row => {
             if (row.length <= Math.max(...Object.values(indices).filter(v => v !== undefined && v !== null))) return false;
             
@@ -1468,9 +1466,11 @@ function saveImageToDrive(imageData, collectionName = 'Default') {
     if (!imageData || !imageData.base64Data || !imageData.mimeType || !imageData.fileName) { Logger.log("saveImageToDrive: Missing data.");
         return "";
     }
-    if (!IMAGE_BACKUP_FOLDER_ID || IMAGE_BACKUP_FOLDER_ID === "YOUR_DRIVE_FOLDER_ID_HERE") { logError("saveImageToDrive", "IMAGE_BACKUP_FOLDER_ID not set."); return ""; }
+    if (!IMAGE_BACKUP_FOLDER_ID || IMAGE_BACKUP_FOLDER_ID === "YOUR_DRIVE_FOLDER_ID_HERE") { logError("saveImageToDrive", "IMAGE_BACKUP_FOLDER_ID not set."); return "";
+    }
     const base64String = imageData.base64Data.split(',')[1];
-    if (!base64String) { Logger.log("saveImageToDrive: Invalid base64 data format."); return ""; }
+    if (!base64String) { Logger.log("saveImageToDrive: Invalid base64 data format."); return "";
+    }
     try {
       const blob = Utilities.newBlob(Utilities.base64Decode(base64String), imageData.mimeType, imageData.fileName);
       let parentFolder = DriveApp.getFolderById(IMAGE_BACKUP_FOLDER_ID);
@@ -1478,7 +1478,8 @@ function saveImageToDrive(imageData, collectionName = 'Default') {
       let collectionFolder = folders.hasNext() ? folders.next() : parentFolder.createFolder(collectionName);
       if(!collectionFolder) throw new Error("Could not get or create collection folder in Drive.");
       const existingFiles = collectionFolder.getFilesByName(imageData.fileName);
-      while (existingFiles.hasNext()) { existingFiles.next().setTrashed(true); }
+      while (existingFiles.hasNext()) { existingFiles.next().setTrashed(true);
+      }
       const savedFile = collectionFolder.createFile(blob);
       savedFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       const fileId = savedFile.getId();
@@ -1628,7 +1629,7 @@ function getInventoryByCollection(collectionName) {
           .forEach(r => {
             const oName = r[idx.OUTFIT_NAME];
             if (!outfits[oName]) {
-                outfits[oName] = {
+                 outfits[oName] = {
                     name: oName,
                     imageUrl: idx.IMAGE_URL > -1 && r.length > idx.IMAGE_URL ? r[idx.IMAGE_URL] || '' : '',
                     isActive: idx.IS_ACTIVE > -1 && r.length > idx.IS_ACTIVE ? r[idx.IS_ACTIVE] === true : true,
@@ -1667,7 +1668,7 @@ function getInventoryByCollection(collectionName) {
                 availableSizes: idx.AVAIL_SIZES > -1 && r.length > idx.AVAIL_SIZES && r[idx.AVAIL_SIZES] ? r[idx.AVAIL_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
                 eta: etaDate,
                 swapSku: idx.SWAP_SKU > -1 && r.length > idx.SWAP_SKU ? r[idx.SWAP_SKU] || '' : '',
-                swapAvailableSizes: idx.SWAP_SIZES > -1 && r.length > idx.SWAP_SIZES && r[idx.SWAP_SIZES] ? r[idx.SWAP_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
+                swapAvailableSizes: idx.SWAP_SIZES > -1 && r.length > idx.SWAP_SIZES ? r[idx.SWAP_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
                 notes: idx.NOTES > -1 && r.length > idx.NOTES ? r[idx.NOTES] || '' : ''
             });
         });
@@ -1729,7 +1730,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
             if (pCatUp === "BOTTOM - W/INSEAM" || pCatUp === "BOTTOM (IN) - W/INSEAM") {
                 sizeConsumingPieceCount += 2;
             } else {
-                sizeConsumingPieceCount += 1;
+                 sizeConsumingPieceCount += 1;
             }
         } else if (pCatUp === sockCategory || yesNoCategories.includes(pCatUp)) {
             sizeConsumingPieceCount += 1;
@@ -1750,6 +1751,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
         const swapSizesForPiece = (p.swapAvailableSizes || []).map(s => s.toUpperCase());
         const etaString = p.eta ? ` ETA: ${p.eta}` : '';
 
+     
         if (sizedCategoryOrder.includes(pCatUp)) {
             if (pCatUp === "BOTTOM - W/INSEAM" || pCatUp === "BOTTOM (IN) - W/INSEAM") {
                  if (currentSizeIndex + 1 < requestedSizes.length) {
@@ -1815,7 +1817,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
                     noteForPiece = ` (${p.category} size needed in preference)`;
                      itemsOutOfStock++;
                      overallStatusCode = Math.max(overallStatusCode, 1);
-                 }
+                }
             }
         } else if (pCatUp === sockCategory) {
              if (currentSizeIndex < requestedSizes.length) {
@@ -1932,7 +1934,6 @@ function getInventoryForOutfitUpdate(collectionName, outfitName) {
              p.rowIndex = rIdx !== -1 ? rIdx + 1 : 0;
              if(p.rowIndex===0) Logger.log(`Warning (Active SS Inv Update): Row not found for ${outfitName}-SKU:${p.sku}. This piece cannot be updated by its 
  original SKU if it changed.`);
-       
         });
         return targetOutfit;
     } catch(e){
@@ -2047,20 +2048,22 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
                             } else {
                                 valueToSet = newValue;
                             }
-                        } catch(e){ valueToSet = newValue; }
+                        } catch(e){ valueToSet = newValue;
+                        }
                      }
                      
                     if (originalStr !== newStr) {
                          inventorySheet.getRange(sheetRowForPiece, colIdxZeroBased + 1).setValue(valueToSet);
                          updatesMadeCounter++;
                     }
-                } else { Logger.log(`Warning: Header for ${invHeaderKey} ('${headerName}') not found or row too short during piece update for SKU ${pieceData.sku}.`); }
+                } else { Logger.log(`Warning: Header for ${invHeaderKey} ('${headerName}') not found or row too short during piece update for SKU ${pieceData.sku}.`);
+                }
             };
             updatePieceCell('PROD_SKU', pieceData.sku?.toString().trim() ?? "");
             updatePieceCell('COLOR', pieceData.color?.toString().trim() ?? "");
             updatePieceCell('AVAIL_SIZES', Array.isArray(pieceData.availableSizes) ? pieceData.availableSizes.join(',') : '');
             updatePieceCell('ETA', pieceData.eta?.toString().trim() ?? "");
-            updatePieceCell('NOTES', pieceData.notes?.toString() ?? "");
+            updatePieceCell('NOTES', pieceData.notes?.toString().trim() ?? "");
             updatePieceCell('SWAP_SKU', pieceData.swapSku?.toString().trim() ?? "");
             updatePieceCell('SWAP_SIZES', Array.isArray(pieceData.swapAvailableSizes) ? pieceData.swapAvailableSizes.join(',') : '');
         });
@@ -2078,7 +2081,6 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
             return { success: true, message: `Inventory updated successfully for ${outfitName}.`, finalImageId: newImageFileId };
         }
         return { success: true, message: "No changes were detected for the inventory.", finalImageId: newImageFileId };
-
     } catch (e) {
         logError('updateInventoryItems', `Error updating inventory for ${collectionName}-${outfitName} in Active SS: ${e.message}`, e.stack);
         logActivity("INVENTORY_UPDATE_ERROR", `Error updating inventory for ${collectionName}-${outfitName}`, {collection: collectionName, outfit: outfitName, error: e.message});
@@ -2361,7 +2363,7 @@ function getDashboardStats(collectionNamesArray) {
         }
          if (colIndices.COLLECTION_NAME === undefined || colIndices.FULFILLMENT_STATUS === undefined) {
              throw new Error("Critical column indices (COLLECTION_NAME or FULFILLMENT_STATUS) could not be determined. Dashboard stats cannot be calculated.");
-         }
+        }
 
         data.slice(1).forEach(r => {
             const maxIndex = Math.max(...Object.values(colIndices).filter(v => v !== undefined));
@@ -2487,7 +2489,7 @@ function getDashboardStats(collectionNamesArray) {
               name, 
               count, 
               imageUrl: outfitImageMap.get(name) || '',
-              pieces: outfitPiecesMap.get(name) || [] // <-- ADDED
+               pieces: outfitPiecesMap.get(name) || [] // <-- ADDED
             }));
         // *** NEW LOGIC ENDS HERE ***
 
@@ -2506,7 +2508,8 @@ function getDashboardStats(collectionNamesArray) {
 
 
 function getProductsList() {
-    if (!productsSheet) { logError('getProductsList', 'Products sheet (Active SS) not found.'); return []; }
+    if (!productsSheet) { logError('getProductsList', 'Products sheet (Active SS) not found.'); return [];
+    }
     try {
         const data = productsSheet.getDataRange().getValues();
         if (data.length <= 1) return [];
@@ -2518,7 +2521,8 @@ function getProductsList() {
             productName: row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : '',
             category: row.length > catCol && row[catCol] ? row[catCol].toString().trim() : ''
         })).filter(p => p.productName).reverse();
-    } catch (e) { logError('getProductsList', `Error reading Active SS Products: ${e.message}`, e.stack); return []; }
+    } catch (e) { logError('getProductsList', `Error reading Active SS Products: ${e.message}`, e.stack); return [];
+    }
 }
 
 // <<< NEW FUNCTION for batch adding products >>>
@@ -2681,7 +2685,7 @@ function updateProductCategory(productData) {
         if (originalName.toLowerCase() !== newProductName.toLowerCase()) {
              const conflict = data.slice(1).find((r, idx) => idx !== (foundRowIndex-1) &&
                                               r.length > nameCol &&
-                                               r[nameCol]?.toString().toLowerCase() === newProductName.toLowerCase());
+                                              r[nameCol]?.toString().toLowerCase() === newProductName.toLowerCase());
              if (conflict) {
                 logActivity("PRODUCT_UPDATE_FAIL", `New product name conflicts: ${newProductName}`, {originalName, newProductName, newCategory});
                 return { success: false, message: `New product name "${newProductName}" already exists.` };
@@ -2716,7 +2720,8 @@ function updateProductCategory(productData) {
 }
 
 function getCollectionsList() {
-    if (!collectionsSheet) { logError('getCollectionsList', 'Collections sheet (Active SS) not found.'); return []; }
+    if (!collectionsSheet) { logError('getCollectionsList', 'Collections sheet (Active SS) not found.'); return [];
+    }
     Logger.log("Fetching ALL collections from Active SS for management modal.");
     try {
         const data = collectionsSheet.getDataRange().getValues();
@@ -2817,7 +2822,7 @@ function updateCollection(collectionData) {
         if (originalName.toLowerCase() !== newName.toLowerCase()) {
              const conflict = data.slice(1).find((r, idx) => idx !== (foundRowIndex-1) &&
                                               r.length > nameCol &&
-                                               r[nameCol]?.toString().toLowerCase() === newName.toLowerCase());
+                                              r[nameCol]?.toString().toLowerCase() === newName.toLowerCase());
              if (conflict) {
                 logActivity("COLLECTION_UPDATE_FAIL", `New collection name conflicts: ${newName}`, {originalName, newName, promoCode, isActive});
                 return { success: false, message: `New name "${newName}" already exists.` };
@@ -2884,170 +2889,106 @@ function archiveCollection(collectionNameToArchive) {
     const historicalOrdersSheet = historicalSS.getSheetByName(ORDERS_SHEET_NAME);
     const historicalInventorySheet = historicalSS.getSheetByName(INVENTORY_SHEET_NAME);
 
-    if (!activeCollectionsSheet || !activeOrdersSheet || !activeInventorySheet) {
-        logError('archiveCollection', 'One or more required sheets (Collections, Orders, Inventory) not found in Active SS.');
-        return { success: false, message: 'Error: Critical sheet missing in Active data. Archiving failed.' };
-    }
-    if (!historicalCollectionsSheet || !historicalOrdersSheet || !historicalInventorySheet) {
-        logError('archiveCollection', 'One or more required sheets (Collections, Orders, Inventory) not found in Historical SS.');
-        return { success: false, message: 'Error: Critical sheet missing in Historical data store. Archiving failed.' };
+    if (!activeCollectionsSheet || !activeOrdersSheet || !activeInventorySheet || !historicalCollectionsSheet || !historicalOrdersSheet || !historicalInventorySheet) {
+        logError('archiveCollection', 'One or more required sheets not found in Active or Historical SS.');
+        return { success: false, message: 'Error: Critical sheet missing in Active or Historical data. Archiving failed.' };
     }
 
     const activeCollectionsData = activeCollectionsSheet.getDataRange().getValues();
     const activeCollectionsHeaders = activeCollectionsData[0];
     const acNameCol = activeCollectionsHeaders.indexOf("CollectionName");
-    const acIsActiveCol = activeCollectionsHeaders.indexOf("IsActive");
-    if (acNameCol === -1 || acIsActiveCol === -1) {
-        logError('archiveCollection', 'CollectionName or IsActive column not found in Active Collections sheet.');
-        return { success: false, message: 'Configuration error in Active Collections sheet.' };
-    }
-
     let collectionRowInActiveData = -1;
     let collectionInfoToCopy = null;
-    let isActuallyInactive = false;
+
     for (let i = 1; i < activeCollectionsData.length; i++) {
-        if (activeCollectionsData[i].length > Math.max(acNameCol, acIsActiveCol) && activeCollectionsData[i][acNameCol] === collectionNameToArchive) {
+        if (activeCollectionsData[i][acNameCol] === collectionNameToArchive) {
             collectionRowInActiveData = i;
             collectionInfoToCopy = activeCollectionsData[i];
-            if (activeCollectionsData[i][acIsActiveCol] === false) {
-                isActuallyInactive = true;
-            }
             break;
         }
     }
 
     if (collectionRowInActiveData === -1) {
-        logActivity("COLLECTION_ARCHIVE_FAIL", `Collection not found to archive: ${collectionNameToArchive}`);
         return { success: false, message: `Collection "${collectionNameToArchive}" not found in the Active system.` };
     }
-    if (!isActuallyInactive) {
-        logActivity("COLLECTION_ARCHIVE_FAIL", `Attempt to archive active collection: ${collectionNameToArchive}`);
-        return { success: false, message: `Collection "${collectionNameToArchive}" is still marked as Active. Please deactivate it first before archiving.` };
+    if (collectionInfoToCopy[activeCollectionsHeaders.indexOf("IsActive")] === true) {
+       return { success: false, message: `Collection "${collectionNameToArchive}" is still marked as Active. Please deactivate it first.` };
     }
 
     const lock = LockService.getScriptLock();
-    let lockAcquired = false;
-    try {
-        lockAcquired = lock.tryLock(30000);
-        if (!lockAcquired) {
-            logError('archiveCollection', `Lock timeout for archiving ${collectionNameToArchive}.`);
-            logActivity("COLLECTION_ARCHIVE_LOCK_TIMEOUT", `Lock timeout for archiving: ${collectionNameToArchive}`);
-            return { success: false, message: "Could not archive now (system busy). Please try again." };
-        }
+    if (!lock.tryLock(30000)) {
+        return { success: false, message: "Could not archive now (system busy). Please try again." };
+    }
 
+    try {
+        // --- COPY PHASE ---
+        // Copy Collection Info
         if (collectionInfoToCopy) {
             Logger.log(`Copying collection info for "${collectionNameToArchive}" to Historical.`);
-            const historicalCollectionsHeaders = historicalCollectionsSheet.getRange(1,1,1,historicalCollectionsSheet.getLastColumn()).getValues()[0];
-            const adjustedCollectionRow = new Array(historicalCollectionsHeaders.length).fill("");
-            collectionInfoToCopy.forEach((val, idx) => {
-                if(idx < adjustedCollectionRow.length) adjustedCollectionRow[idx] = val;
-            });
-            historicalCollectionsSheet.appendRow(adjustedCollectionRow);
+            historicalCollectionsSheet.appendRow(collectionInfoToCopy);
         }
 
-        Logger.log(`Copying orders for "${collectionNameToArchive}" to Historical.`);
-        const activeOrdersDataAll = activeOrdersSheet.getDataRange().getValues();
-        const activeOrdersHeaders = activeOrdersDataAll[0];
-        const aoCollNameColIdx = activeOrdersHeaders.indexOf(ORDERS_COL.COLLECTION_NAME > 0 ? activeOrdersHeaders[ORDERS_COL.COLLECTION_NAME-1] : "CollectionName");
-
-        const ordersToMove = [];
-        if(aoCollNameColIdx > -1) {
-            for(let i = 1; i < activeOrdersDataAll.length; i++){
-                if(activeOrdersDataAll[i].length > aoCollNameColIdx && activeOrdersDataAll[i][aoCollNameColIdx] === collectionNameToArchive) {
-                    ordersToMove.push(activeOrdersDataAll[i]);
-                }
-            }
-        }
+        // Copy Orders
+        const allOrdersData = activeOrdersSheet.getDataRange().getValues();
+        const aoCollNameColIdx = allOrdersData[0].indexOf("CollectionName");
+        const ordersToMove = allOrdersData.slice(1).filter(r => r[aoCollNameColIdx] === collectionNameToArchive);
         if (ordersToMove.length > 0) {
-            const historicalOrdersHeaders = historicalOrdersSheet.getRange(1,1,1,historicalOrdersSheet.getLastColumn()).getValues()[0];
-            const adjustedOrdersToMove = ordersToMove.map(orderRow => {
-                const newOrderRow = new Array(historicalOrdersHeaders.length).fill("");
-                orderRow.forEach((val, idx) => { if(idx < newOrderRow.length) newOrderRow[idx] = val; });
-                return newOrderRow;
-            });
-            historicalOrdersSheet.getRange(historicalOrdersSheet.getLastRow() + 1, 1, adjustedOrdersToMove.length, adjustedOrdersToMove[0].length).setValues(adjustedOrdersToMove);
+            historicalOrdersSheet.getRange(historicalOrdersSheet.getLastRow() + 1, 1, ordersToMove.length, ordersToMove[0].length).setValues(ordersToMove);
             Logger.log(`Copied ${ordersToMove.length} orders to Historical.`);
-        } else { Logger.log(`No orders found for "${collectionNameToArchive}" in Active sheet to copy.`); }
-
-        Logger.log(`Copying inventory for "${collectionNameToArchive}" to Historical.`);
-        const activeInventoryDataAll = activeInventorySheet.getDataRange().getValues();
-        const activeInventoryHeaders = activeInventoryDataAll[0];
-        const aiCollNameColIdx = activeInventoryHeaders.indexOf(INV_HEADERS.COLLECTION);
-
-        const inventoryToMove = [];
-        if(aiCollNameColIdx > -1){
-            for(let i = 1; i < activeInventoryDataAll.length; i++){
-                if(activeInventoryDataAll[i].length > aiCollNameColIdx && activeInventoryDataAll[i][aiCollNameColIdx] === collectionNameToArchive) {
-                    inventoryToMove.push(activeInventoryDataAll[i]);
-                }
-            }
         }
+
+        // Copy Inventory
+        const allInventoryData = activeInventorySheet.getDataRange().getValues();
+        const aiCollNameColIdx = allInventoryData[0].indexOf("CollectionName");
+        const inventoryToMove = allInventoryData.slice(1).filter(r => r[aiCollNameColIdx] === collectionNameToArchive);
         if (inventoryToMove.length > 0) {
-             const historicalInventoryHeaders = historicalInventorySheet.getRange(1,1,1,historicalInventorySheet.getLastColumn()).getValues()[0];
-             const adjustedInventoryToMove = inventoryToMove.map(invRow => {
-                const newInvRow = new Array(historicalInventoryHeaders.length).fill("");
-                invRow.forEach((val, idx) => { if(idx < newInvRow.length) newInvRow[idx] = val; });
-                return newInvRow;
-             });
-             historicalInventorySheet.getRange(historicalInventorySheet.getLastRow() + 1, 1, adjustedInventoryToMove.length, adjustedInventoryToMove[0].length).setValues(adjustedInventoryToMove);
+            historicalInventorySheet.getRange(historicalInventorySheet.getLastRow() + 1, 1, inventoryToMove.length, inventoryToMove[0].length).setValues(inventoryToMove);
             Logger.log(`Copied ${inventoryToMove.length} inventory items to Historical.`);
-        } else { Logger.log(`No inventory items found for "${collectionNameToArchive}" in Active sheet to copy.`); }
-
-        if (ordersToMove.length > 0 && aoCollNameColIdx > -1) {
-            Logger.log(`Deleting orders for "${collectionNameToArchive}" from Active sheet.`);
-            let deletedOrderCount = 0;
-            const currentActiveOrdersDataForDelete = activeOrdersSheet.getDataRange().getValues();
-            for (let i = currentActiveOrdersDataForDelete.length - 1; i >= 1; i--) {
-                if (currentActiveOrdersDataForDelete[i].length > aoCollNameColIdx && currentActiveOrdersDataForDelete[i][aoCollNameColIdx] === collectionNameToArchive) {
-                    activeOrdersSheet.deleteRow(i + 1);
-                    deletedOrderCount++;
-                }
-            }
-            Logger.log(`Deleted ${deletedOrderCount} orders from Active sheet.`);
         }
 
-        if (inventoryToMove.length > 0 && aiCollNameColIdx > -1) {
-            Logger.log(`Deleting inventory for "${collectionNameToArchive}" from Active sheet.`);
-            let deletedInventoryCount = 0;
-            const currentActiveInventoryDataForDelete = activeInventorySheet.getDataRange().getValues();
-            for (let i = currentActiveInventoryDataForDelete.length - 1; i >= 1; i--) {
-                if (currentActiveInventoryDataForDelete[i].length > aiCollNameColIdx && currentActiveInventoryDataForDelete[i][aiCollNameColIdx] === collectionNameToArchive) {
-                    activeInventorySheet.deleteRow(i + 1);
-                    deletedInventoryCount++;
-                }
+        // --- EFFICIENT DELETE PHASE ---
+        // Delete Orders
+        if (ordersToMove.length > 0) {
+            const ordersToKeep = allOrdersData.slice(1).filter(r => r[aoCollNameColIdx] !== collectionNameToArchive);
+            activeOrdersSheet.getRange(2, 1, activeOrdersSheet.getLastRow() -1, activeOrdersSheet.getLastColumn()).clearContent();
+            if (ordersToKeep.length > 0) {
+                activeOrdersSheet.getRange(2, 1, ordersToKeep.length, ordersToKeep[0].length).setValues(ordersToKeep);
             }
-            Logger.log(`Deleted ${deletedInventoryCount} inventory items from Active sheet.`);
+            Logger.log(`Efficiently removed ${ordersToMove.length} orders from Active sheet.`);
         }
         
+        // Delete Inventory
+        if(inventoryToMove.length > 0){
+            const inventoryToKeep = allInventoryData.slice(1).filter(r => r[aiCollNameColIdx] !== collectionNameToArchive);
+            activeInventorySheet.getRange(2, 1, activeInventorySheet.getLastRow() - 1, activeInventorySheet.getLastColumn()).clearContent();
+            if(inventoryToKeep.length > 0){
+                activeInventorySheet.getRange(2, 1, inventoryToKeep.length, inventoryToKeep[0].length).setValues(inventoryToKeep);
+            }
+            Logger.log(`Efficiently removed ${inventoryToMove.length} inventory items from Active sheet.`);
+        }
+
+        // Delete Collection row
         activeCollectionsSheet.deleteRow(collectionRowInActiveData + 1);
         Logger.log(`Deleted collection "${collectionNameToArchive}" from Active Collections sheet.`);
 
         SpreadsheetApp.flush();
-        logError('archiveCollection', `Successfully archived collection: ${collectionNameToArchive}`, 'INFO'); // Using logError with INFO type
         logActivity("COLLECTION_ARCHIVE_SUCCESS", `Archived collection: ${collectionNameToArchive}`, {ordersCopied: ordersToMove.length, inventoryCopied: inventoryToMove.length});
         scriptCache.remove('activeCollections_activeSS');
-        scriptCache.remove('allCollections_activeSS');
         return { success: true, message: `Collection "${collectionNameToArchive}" has been successfully archived.` };
-    } catch (e) {
-        logError('archiveCollection', `Error during archiving of ${collectionNameToArchive}: ${e.message}`, e.stack);
-        logActivity("COLLECTION_ARCHIVE_ERROR", `Error archiving collection: ${collectionNameToArchive}`, {error: e.message});
-        return { success: false, message: `Archiving failed: ${e.message}` };
-    } finally {
-        if (lockAcquired) {
-            lock.releaseLock();
-            Logger.log(`Released lock for archiving ${collectionNameToArchive}.`);
-        }
-    }
 
-  } catch (error) { // Outer catch for setup errors before lock
-    logError('archiveCollection', `Outer error for ${collectionNameToArchive}: ${error.message}`, error.stack);
-    logActivity("COLLECTION_ARCHIVE_SYSTEM_ERROR", `System error during archiving setup for ${collectionNameToArchive}`, {error: error.message});
-    return { success: false, message: `System error during archiving setup: ${error.message}` };
+    } finally {
+        lock.releaseLock();
+    }
+  } catch (e) {
+    logError('archiveCollection', `Outer error for ${collectionNameToArchive}: ${e.message}`, e.stack);
+    return { success: false, message: `System error during archiving setup: ${e.message}` };
   }
 }
 
+
 function generateCsvData(collectionName, filters = {}) {
-   if (!ordersSheet) { return "Error: Orders sheet (Active SS) not found."; }
+   if (!ordersSheet) { return "Error: Orders sheet (Active SS) not found.";
+   }
    Logger.log(`Generating CSV from Active SS for: ${collectionName}, Filters: ${JSON.stringify(filters)}`);
    try {
        const result = getFilteredOrders(collectionName, filters, 1, 1000000);
@@ -3102,12 +3043,14 @@ function generateImportCsvData(collectionName, filters = {}) {
                  email,
                  outfitOrdered
             ];
-              csvString += row.map(value => {
+   
+            csvString += row.map(value => {
                 let cell = value.toString();
                 if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
                     cell = `"${cell.replace(/"/g, '""')}"`;
                 }
-                return cell;
+   
+                 return cell;
             }).join(',') + '\r\n';
         });
         logActivity("IMPORT_CSV_EXPORT", `Generated Import CSV for ${collectionName}`, {collectionName, filters, rows: ordersToExport.length});
@@ -3172,7 +3115,7 @@ function uploadRawDataToSheet(fileContent, fileName) {
              }
              return newRow;
          });
-         const numRowsToWrite = dataToWrite.length;
+        const numRowsToWrite = dataToWrite.length;
         if (numRowsToWrite > 0) {
             rawImportSheet.getRange(2, 1, numRowsToWrite, expectedRawHeadersCount).setValues(dataToWrite);
             SpreadsheetApp.flush();
@@ -3274,9 +3217,8 @@ function getBgImage() {
     return PropertiesService.getScriptProperties().getProperty('PRESENTATION_BG_ID');
 }
 
-//Function to get Stylesheet.html to be read in the historical part of the embed
-function getStylesheetContent() {
-  return HtmlService.createHtmlOutputFromFile('Stylesheet').getContent();
-}
-
 // ***** END: REVISED FUNCTIONS *****
+
+function getStylesheetContent() {
+      return HtmlService.createHtmlOutputFromFile('Stylesheet').getContent();
+}
