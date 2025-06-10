@@ -73,7 +73,6 @@ const ORDERS_COL = { // 1-based index
     PREF1: 13, PREF2: 14, PREF3: 15, PREF4: 16, PREF5: 17, 
     INSEAM: 18, UNAVAILABLE_NOTES: 19, GENERAL_NOTES: 20, OUTFITS_RAW_ORIGINAL: 21, // Column U 
     OUTFIT_ORDERED: 22, DATE_ORDERED: 23, OMS_ID: 24, OMS_COST: 25, ORDER_ISSUE: 26, 
-    
     FULFILLMENT_STATUS: 27, PROMO_CODE: 28, LAST_UPDATED: 29, FLAG_NOTES: 30, // Column AD 
     SWAP: 31 // NEW: Column AE 
 };
@@ -119,6 +118,7 @@ const INV_HEADERS = {
   SWAP_SIZES: "SwapAvailableSizes", NOTES: "StockStatusNotes", IS_ACTIVE: "IsActive", 
   OUTFIT_QUICK_NOTE: "OutfitQuickNote" 
 };
+
 // --- Error Logging ---
 function logError(functionName, errorMessage, details = '') {
   if (!errorLogSheet) {
@@ -218,13 +218,11 @@ function doGet(e) {
                 <!DOCTYPE html><html><head><title>Access Denied</title>
                 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-             
                 <style>body { display: flex; align-items: center; justify-content: center; height: 100vh; background-color: #f8f9fa; text-align: center; }</style>
                 </head><body><div class="container">
                 <h3 class="mb-3"><i class="fas fa-lock mr-2"></i>Access Denied</h3>
                 <p class="lead">You are not authorized to view this page.</p>
                 <p><a href="${SCRIPT_URL || getScriptUrl()}" class="btn btn-primary"><i class="fas fa-home"></i> Go to Main Application</a></p>
-           
          </div></body></html>`;
             return HtmlService.createHtmlOutput(deniedHtml).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
         }
@@ -265,8 +263,7 @@ function getScriptUrl() {
 }
 
 function getImageData(fileId) {
-  if (!fileId) { Logger.log("getImageData: No File ID provided."); return null;
-  }
+  if (!fileId) { Logger.log("getImageData: No File ID provided."); return null; }
   try {
     if (!/^[a-zA-Z0-9_-]+$/.test(fileId)) throw new Error("Invalid File ID format provided.");
     const file = DriveApp.getFileById(fileId);
@@ -298,14 +295,12 @@ function getInitialAppData() {
             productCategories: productCategories,
             allSizes: {
                 standard: STANDARD_SIZES,
-  
                 waist: WAIST_SIZES,
                 sock: SOCK_SIZES,
                 accessoryHat: ACCESSORY_HAT_SIZES,
                 kids: KIDS_SIZES,
                 bottomWInseam: BOTTOM_W_INSEAM_SIZES,
-               
-                 bottomInWInseam: 
+                bottomInWInseam: 
                 BOTTOM_IN_W_INSEAM_SIZES
             },
             isAuthorizedProcessor: isAuthorized,
@@ -368,7 +363,6 @@ function getActiveUsers(minutesThreshold = 15) {
                     recentActivity[email] = {
                         email: email,
                         lastAccess: new Date(row[0]).toLocaleString(),
-     
                         view: activityTypeOrView
                     };
                 }
@@ -398,7 +392,6 @@ function getTodaysActiveUsers() {
                     if (!todaysActivity[email]) {
                         todaysActivity[email] = {
                             email: email,
-                   
                             firstSeen: new Date(timestamp).toLocaleTimeString(),
                             activityTypes: new Set()
                         };
@@ -462,8 +455,7 @@ function getRecentErrors(limit = 20) {
 
 function getConfigOptionsForAdmin() {
     if (!isUserAuthorizedForProcessing()) {
-        return { error: "Unauthorized to fetch config options."
-        };
+        return { error: "Unauthorized to fetch config options." };
     }
     if (!configSheet) {
         logError('getConfigOptionsForAdmin', 'Config sheet (in Active SS) not found.');
@@ -488,7 +480,6 @@ function getConfigOptionsForAdmin() {
             optionValue: row[valCol] || '',
             styleInfo: styleCol > -1 && row.length > styleCol ? (row[styleCol] || '') : '',
             displayOrder: orderCol > -1 && row.length > orderCol ? (row[orderCol] || '') : '',
- 
             description: descCol > -1 && row.length > descCol ? (row[descCol] || '') : ''
         })).filter(opt => opt.settingType || opt.optionValue);
     } catch (e) {
@@ -498,12 +489,10 @@ function getConfigOptionsForAdmin() {
 }
 
 function addConfigOption(optionData) {
-    if (!isUserAuthorizedForProcessing()) return { success: false, message: "Unauthorized."
-    };
+    if (!isUserAuthorizedForProcessing()) return { success: false, message: "Unauthorized." };
     if (!configSheet) return { success: false, message: "Config sheet (Active SS) not found." };
     if (!optionData || !optionData.settingType || !optionData.optionValue) {
-        return { success: false, message: "SettingType and OptionValue are required."
-        };
+        return { success: false, message: "SettingType and OptionValue are required." };
     }
     try {
         const headers = configSheet.getRange(1, 1, 1, configSheet.getLastColumn()).getValues()[0].map(h => h.toString().trim());
@@ -517,8 +506,7 @@ function addConfigOption(optionData) {
         const existingData = configSheet.getDataRange().getValues();
         for(let i = 1; i < existingData.length; i++) {
             if (existingData[i][typeCol] === optionData.settingType && existingData[i][valCol] === optionData.optionValue) {
-                return { success: false, message: "This SettingType and OptionValue combination already exists."
-                };
+                return { success: false, message: "This SettingType and OptionValue combination already exists." };
             }
         }
 
@@ -543,8 +531,7 @@ function updateConfigOption(optionData) {
     if (!isUserAuthorizedForProcessing()) return { success: false, message: "Unauthorized." };
     if (!configSheet) return { success: false, message: "Config sheet (Active SS) not found." };
     if (!optionData || !optionData.rowIndex || !optionData.settingType || !optionData.optionValue) {
-        return { success: false, message: "Row index, SettingType, and OptionValue are required for update."
-        };
+        return { success: false, message: "Row index, SettingType, and OptionValue are required for update." };
     }
     try {
         const headers = configSheet.getRange(1, 1, 1, configSheet.getLastColumn()).getValues()[0].map(h => h.toString().trim());
@@ -558,8 +545,7 @@ function updateConfigOption(optionData) {
         for(let i = 1; i < existingData.length; i++) {
             if ((i + 1) !== parseInt(optionData.rowIndex, 10)) {
                 if (existingData[i][typeCol-1] === optionData.settingType && existingData[i][valCol-1] === optionData.optionValue) {
-                    return { success: false, message: "The new SettingType and OptionValue combination already exists on a different row."
-                    };
+                    return { success: false, message: "The new SettingType and OptionValue combination already exists on a different row." };
                 }
             }
         }
@@ -585,8 +571,7 @@ function deleteConfigOption(rowIndexToDelete) {
     try {
         const actualRowIndex = parseInt(rowIndexToDelete, 10);
         if (isNaN(actualRowIndex) || actualRowIndex < 2) {
-             return { success: false, message: "Invalid row index for deletion."
-             };
+             return { success: false, message: "Invalid row index for deletion." };
         }
         configSheet.deleteRow(actualRowIndex);
         SpreadsheetApp.flush();
@@ -664,22 +649,17 @@ function getUniqueOwnerNames(collectionName = null) {
            
             if (statusInRow === 'Remove') {
                 return;
-     
             }
 
             if (collectionName) {
                 const currentCollectionInRow = row[collectionColIndex1Based - 1];
                 if (currentCollectionInRow === collectionName && ownerInRow && ownerInRow.toString().trim() !== "") {
                     ownerSet.add(ownerInRow.toString().trim());
-       
-             
-            }
+                }
             } else { // No specific collection, get all unique owners from non-"Remove" status orders 
                  if (ownerInRow && ownerInRow.toString().trim() !== "") {
                     ownerSet.add(ownerInRow.toString().trim());
-             
-              }
-         
+                 }
             }
         });
         const sortedOwners = Array.from(ownerSet).sort((a, b) => a.localeCompare(b));
@@ -709,8 +689,7 @@ function isUserAuthorizedForProcessing() {
     const cacheKey = 'authorizedProcessors_active';
     let cachedEmails = scriptCache.get(cacheKey);
     let authorizedEmails;
-    if (cachedEmails) { try { authorizedEmails = JSON.parse(cachedEmails);
-    } catch(e){/* ignore parse error, refetch */} }
+    if (cachedEmails) { try { authorizedEmails = JSON.parse(cachedEmails); } catch(e){/* ignore parse error, refetch */} }
 
     if (!authorizedEmails) {
         try {
@@ -779,7 +758,6 @@ function processRawImportData(collectionNameToAssign) {
       let newRow = new Array(ordersLastCol).fill("");
      
       newRow[ORDERS_COL.ORDER_ID-1]=orderId;
-   
       newRow[ORDERS_COL.COLLECTION_NAME-1]=collectionNameToAssign;
       newRow[ORDERS_COL.SUBMITTED_DATE-1]=row[RAW_COL.SUBMITTED_DATE-1];
       const contactName = row[RAW_COL.CONTACT-1] || ""; 
@@ -870,8 +848,7 @@ function generateUniqueOrderId() {
 
 function abbreviateState(stateName) {
      if (!stateName) return "";
-     const states = { 'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD', 'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 
-'UT', 'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY', 'district of columbia': 'DC', 'american samoa': 'AS', 'guam': 'GU', 'northern mariana islands': 'MP', 'puerto rico': 'PR', 'virgin islands': 'VI' };
+     const states = { 'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD', 'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY', 'district of columbia': 'DC', 'american samoa': 'AS', 'guam': 'GU', 'northern mariana islands': 'MP', 'puerto rico': 'PR', 'virgin islands': 'VI' };
      const lower = stateName.toLowerCase().trim();
      return states[lower] || stateName.toUpperCase();
 }
@@ -883,8 +860,7 @@ function splitOutfitPreferences(rawPreferences) {
 
 function getActiveCollections() {
     const cacheKey = 'activeCollections_activeSS';
-    const cached = scriptCache.get(cacheKey); if (cached) { try { return JSON.parse(cached);
-    } catch(e){/* ignore */} }
+    const cached = scriptCache.get(cacheKey); if (cached) { try { return JSON.parse(cached); } catch(e){/* ignore */} }
     if (!collectionsSheet) {
         logError('getActiveCollections', 'Collections sheet (in Active SS) not found.');
         return [];
@@ -1008,10 +984,10 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
             DateOrdered: ORDERS_COL.DATE_ORDERED, OutfitOrdered: ORDERS_COL.OUTFIT_ORDERED,
             OMS_ID: ORDERS_COL.OMS_ID, PREF1: ORDERS_COL.PREF1, PREF2: ORDERS_COL.PREF2,
             PREF3: ORDERS_COL.PREF3, PREF4: ORDERS_COL.PREF4, PREF5: ORDERS_COL.PREF5,
-          
             ORDER_ISSUE: ORDERS_COL.ORDER_ISSUE,
             OUTFITS_RAW_ORIGINAL: ORDERS_COL.OUTFITS_RAW_ORIGINAL,
-            UNAVAILABLE_NOTES: ORDERS_COL.UNAVAILABLE_NOTES    
+            UNAVAILABLE_NOTES: ORDERS_COL.UNAVAILABLE_NOTES,
+            OMS_Cost: ORDERS_COL.OMS_COST
         };
         for (const key in requiredCols) {
             const colIndexOneBased = requiredCols[key];
@@ -1032,8 +1008,7 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                     filterStartDateObj = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
                     if (isNaN(filterStartDateObj.getTime())) filterStartDateObj = null;
                 }
-            } catch (e) { filterStartDateObj = null;
-            }
+            } catch (e) { filterStartDateObj = null; }
         }
         if (filters.dateRangeEnd) {
             try {
@@ -1042,8 +1017,7 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                     filterEndDateObj = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
                     if (isNaN(filterEndDateObj.getTime())) filterEndDateObj = null;
                 }
-            } catch (e) { filterEndDateObj = null;
-            }
+            } catch (e) { filterEndDateObj = null; }
         }
 
         const emailFilterLower = filters.emailSearch?.toString().toLowerCase().trim();
@@ -1052,6 +1026,7 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
         const orderIssueFilter = filters.orderIssue?.toString().trim();
         const outfitsRawFilter = filters.outfitsRawOriginal?.toString().trim();      
         const unavailableNotesFilter = filters.unavailableNotes?.toString().trim();
+        const omsCostFilter = filters.omsCost;
         const missingLastNameFilter = filters.missingLastName === true;
 
         const allValidRows = data.slice(1).filter(row => {
@@ -1067,27 +1042,29 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
             if (nameFilterLower && !row[indices.Contact]?.toString().toLowerCase().includes(nameFilterLower)) return false;
             if (emailFilterLower && !row[indices.Email]?.toString().toLowerCase().includes(emailFilterLower)) return false;
             
-            if (orderIssueFilter && indices.ORDER_ISSUE !== 
- 
- undefined &&
-       
-                 (row[indices.ORDER_ISSUE]?.toString().trim() !== orderIssueFilter) ) {
+            if (orderIssueFilter && indices.ORDER_ISSUE !== undefined && (row[indices.ORDER_ISSUE]?.toString().trim() !== orderIssueFilter) ) {
                 return false;
             }
 
-            if (outfitsRawFilter && indices.OUTFITS_RAW_ORIGINAL !== undefined &&
-                (row[indices.OUTFITS_RAW_ORIGINAL]?.toString().trim() !== outfitsRawFilter) ) {
-    
+            if (outfitsRawFilter && indices.OUTFITS_RAW_ORIGINAL !== undefined && (row[indices.OUTFITS_RAW_ORIGINAL]?.toString().trim() !== outfitsRawFilter) ) {
                 return false;
             }
-            if (unavailableNotesFilter && indices.UNAVAILABLE_NOTES !== undefined &&
-                (row[indices.UNAVAILABLE_NOTES]?.toString().trim() !== unavailableNotesFilter) ) {
+            if (unavailableNotesFilter && indices.UNAVAILABLE_NOTES !== undefined && (row[indices.UNAVAILABLE_NOTES]?.toString().trim() !== unavailableNotesFilter) ) {
                 return false;
+            }
+
+            if (omsCostFilter) {
+                const omsCostValue = row[indices.OMS_Cost] ? parseFloat(row[indices.OMS_Cost]) : 0;
+                if (omsCostFilter === 'yes' && (!omsCostValue || omsCostValue <= 0)) {
+                    return false;
+                }
+                if (omsCostFilter === 'no' && omsCostValue > 0) {
+                    return false;
+                }
             }
 
             if (missingLastNameFilter) {
-                const contactName = row[indices.Contact]?.toString().trim() ||
-                "";
+                const contactName = row[indices.Contact]?.toString().trim() || "";
                 if (contactName === "" || contactName.includes(" ")) {
                     return false;
                 }
@@ -1145,20 +1122,15 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                  emailForDupCheck = row[indices.Email]?.toString().toLowerCase().trim();
             }
             const orderResult = {
-              
                 orderId: row[indices.OrderID],
                 contact: row[indices.Contact],
                 email: indices.Email !== undefined && row.length > indices.Email ? row[indices.Email] : "",
                 owner: indices.Owner !== undefined && row.length > indices.Owner ? row[indices.Owner] : "",
-            
-                 status: row[indices.FulfillmentStatus],
-         
+                status: row[indices.FulfillmentStatus],
                 dateOrdered: indices.DateOrdered !== undefined && row[indices.DateOrdered] instanceof Date ? Utilities.formatDate(row[indices.DateOrdered], Session.getScriptTimeZone(), "MM/dd/yyyy") : "",
-                outfitOrdered: indices.OutfitOrdered !== undefined && row.length > indices.OutfitOrdered ?
-                row[indices.OutfitOrdered] : "",
+                outfitOrdered: indices.OutfitOrdered !== undefined && row.length > indices.OutfitOrdered ? row[indices.OutfitOrdered] : "",
                 omsId: row[indices.OMS_ID],
-                isDuplicate: emailForDupCheck ?
-                (emailCounts[emailForDupCheck] > 1) : false
+                isDuplicate: emailForDupCheck ? (emailCounts[emailForDupCheck] > 1) : false
             };
             return orderResult;
         });
@@ -1206,8 +1178,7 @@ function getOrderDetails(orderId) {
 
       const finalData = {
           OrderID: orderData.order_id,
-          ContactNameForTitle: orderData.contact ||
-          'N/A',
+          ContactNameForTitle: orderData.contact || 'N/A',
           COLLECTION_NAME: collectionName,
           Contact: orderData.contact, Email: orderData.email, Owner: orderData.owner,
           StreetAddress: orderData.street, City: orderData.city,
@@ -1216,7 +1187,6 @@ function getOrderDetails(orderId) {
           OutfitUnavailableNotes: orderData.unavailable_notes,
           GeneralNotes: orderData.general_notes,
           OutfitsRawOriginal: orderData.outfits_raw_original,
-    
           OutfitOrdered: orderData.outfit_ordered,
           DateOrdered: orderData.date_ordered,
           OMS_ID: orderData.oms_id, OMS_Cost: orderData.oms_cost,
@@ -1237,7 +1207,6 @@ function getOrderDetails(orderId) {
                   if (inventoryOutfit) imgUrl = inventoryOutfit.imageUrl || "";
                 
                   stock.imageUrl = imgUrl;
-      
                   stock.outfitActive = inventoryOutfit ? inventoryOutfit.isActive : true;
                   finalData.preferenceStockStatus.push(stock);
               }
@@ -1246,7 +1215,6 @@ function getOrderDetails(orderId) {
 
       const emailToCheck = orderData.email?.toString().trim();
       finalData.duplicateInfo = emailToCheck ? getDuplicateOrderInfo(collectionName, emailToCheck, orderData.order_id) : {
-     
           isDuplicate: false, otherOrderIds: []
       };
 
@@ -1259,8 +1227,7 @@ function getOrderDetails(orderId) {
 
 
 function getDuplicateOrderInfo(collectionName, email, currentOrderId) {
-     if (!ordersSheet ||
-     !collectionName || !email || !currentOrderId) {
+     if (!ordersSheet || !collectionName || !email || !currentOrderId) {
          return { isDuplicate: false, otherOrderIds: [] };
      }
      const emailLower = email.toLowerCase().trim();
@@ -1297,8 +1264,7 @@ function getDuplicateOrderInfo(collectionName, email, currentOrderId) {
 function getDropdownOptions(optionType) {
     const cacheKey = `dropdownOptions_${optionType}_activeSS`;
     const cached = scriptCache.get(cacheKey);
-    if (cached) { try { return JSON.parse(cached);
-    } catch(e){/* ignore malformed cache, refetch */} }
+    if (cached) { try { return JSON.parse(cached); } catch(e){/* ignore malformed cache, refetch */} }
 
     if (!configSheet) {
         logError('getDropdownOptions', `Config sheet (Active SS) not found for ${optionType}.`);
@@ -1318,10 +1284,8 @@ function getDropdownOptions(optionType) {
                        .filter(r => r[typeCol - 1] === optionType && r[valueCol -1])
                        .map(r => ({
                             value: r[valueCol - 1],
-         
                             style: styleCol > 0 && r.length >= styleCol ? r[styleCol-1] : null,
                             order: orderCol > 0 && r.length >= orderCol ? parseInt(r[orderCol - 1]) || 999 : 999
-                  
                        }));
         if (orderCol > 0) opts.sort((a, b) => a.order - b.order);
         opts = opts.map(({ order, ...rest }) => rest);
@@ -1377,8 +1341,7 @@ function updateOrder(orderDataFromClient) {
         'OrderIssue': 'ORDER_ISSUE', 'FulfillmentStatus': 'FULFILLMENT_STATUS',
         'Contact' : 'CONTACT', 'Email': 'EMAIL', 'Owner': 'OWNER', 'INSEAM': 'INSEAM',
         'OutfitsRawOriginal': 'OUTFITS_RAW_ORIGINAL',
-        'Swap': 
-        'SWAP'
+        'Swap': 'SWAP'
     };
     const getHeaderName = (ordersColKey) => {
         const colNum = ORDERS_COL[ordersColKey];
@@ -1505,11 +1468,9 @@ function saveImageToDrive(imageData, collectionName = 'Default') {
     if (!imageData || !imageData.base64Data || !imageData.mimeType || !imageData.fileName) { Logger.log("saveImageToDrive: Missing data.");
         return "";
     }
-    if (!IMAGE_BACKUP_FOLDER_ID || IMAGE_BACKUP_FOLDER_ID === "YOUR_DRIVE_FOLDER_ID_HERE") { logError("saveImageToDrive", "IMAGE_BACKUP_FOLDER_ID not set."); return "";
-    }
+    if (!IMAGE_BACKUP_FOLDER_ID || IMAGE_BACKUP_FOLDER_ID === "YOUR_DRIVE_FOLDER_ID_HERE") { logError("saveImageToDrive", "IMAGE_BACKUP_FOLDER_ID not set."); return ""; }
     const base64String = imageData.base64Data.split(',')[1];
-    if (!base64String) { Logger.log("saveImageToDrive: Invalid base64 data format."); return "";
-    }
+    if (!base64String) { Logger.log("saveImageToDrive: Invalid base64 data format."); return ""; }
     try {
       const blob = Utilities.newBlob(Utilities.base64Decode(base64String), imageData.mimeType, imageData.fileName);
       let parentFolder = DriveApp.getFolderById(IMAGE_BACKUP_FOLDER_ID);
@@ -1517,8 +1478,7 @@ function saveImageToDrive(imageData, collectionName = 'Default') {
       let collectionFolder = folders.hasNext() ? folders.next() : parentFolder.createFolder(collectionName);
       if(!collectionFolder) throw new Error("Could not get or create collection folder in Drive.");
       const existingFiles = collectionFolder.getFilesByName(imageData.fileName);
-      while (existingFiles.hasNext()) { existingFiles.next().setTrashed(true);
-      }
+      while (existingFiles.hasNext()) { existingFiles.next().setTrashed(true); }
       const savedFile = collectionFolder.createFile(blob);
       savedFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       const fileId = savedFile.getId();
@@ -1535,8 +1495,7 @@ function addNewOutfit(outfitData) {
         return { success: false, message: "Inventory sheet missing." };
     }
     if (!outfitData?.collectionName || !outfitData?.outfitName || !outfitData?.pieces?.length) {
-        return { success: false, message: "Missing required data (collection, outfit name, or pieces)."
-        };
+        return { success: false, message: "Missing required data (collection, outfit name, or pieces)." };
     }
     Logger.log(`Adding outfit to Active SS: ${outfitData.collectionName} - ${outfitData.outfitName}`);
     try {
@@ -1567,21 +1526,17 @@ function addNewOutfit(outfitData) {
              row[headerMap[INV_HEADERS.COLLECTION]-1] = outfitData.collectionName;
              row[headerMap[INV_HEADERS.OUTFIT_NAME]-1] = outfitData.outfitName;
              row[headerMap[INV_HEADERS.IMAGE_URL]-1] = imageFileId;
-   
              if (headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE]) {
                 row[headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE]-1] = outfitData.quickNote || "";
              }
              row[headerMap[INV_HEADERS.PIECE_SEQ]-1] = piece.sequence || (index + 1) * 10;
              row[headerMap[INV_HEADERS.PROD_NAME]-1] = piece.productName||"";
              row[headerMap[INV_HEADERS.PROD_SKU]-1] = piece.sku||"";
- 
              row[headerMap[INV_HEADERS.COLOR]-1] = piece.color||"";
         
              const catUpper = (piece.category || '').toUpperCase();
-             if (catUpper === 'ACCESSORY' ||
-             catUpper === 'HAT') {
-                 row[headerMap[INV_HEADERS.AVAIL_SIZES]-1] = Array.isArray(piece.availableSizes) ?
-                 piece.availableSizes[0] || 'No' : 'No';
+             if (catUpper === 'ACCESSORY' || catUpper === 'HAT') {
+                 row[headerMap[INV_HEADERS.AVAIL_SIZES]-1] = Array.isArray(piece.availableSizes) ? piece.availableSizes[0] || 'No' : 'No';
              } else {
                  row[headerMap[INV_HEADERS.AVAIL_SIZES]-1] = Array.isArray(piece.availableSizes)?piece.availableSizes.join(','):"";
              }
@@ -1610,8 +1565,7 @@ function addNewOutfit(outfitData) {
 function getProductCategories() {
     const cacheKey = 'productCategories_activeSS';
     const cached = scriptCache.get(cacheKey);
-    if (cached) { try { return JSON.parse(cached);
-    } catch(e){} }
+    if (cached) { try { return JSON.parse(cached); } catch(e){} }
     if (!productsSheet) {
         logError('getProductCategories', 'Products sheet (Active SS) not found.');
         return {};
@@ -1674,23 +1628,17 @@ function getInventoryByCollection(collectionName) {
           .forEach(r => {
             const oName = r[idx.OUTFIT_NAME];
             if (!outfits[oName]) {
-      
                 outfits[oName] = {
                     name: oName,
                     imageUrl: idx.IMAGE_URL > -1 && r.length > idx.IMAGE_URL ? r[idx.IMAGE_URL] || '' : '',
-                    isActive: idx.IS_ACTIVE > -1 && r.length > idx.IS_ACTIVE 
- 
- ? r[idx.IS_ACTIVE] === true : true,
-  
+                    isActive: idx.IS_ACTIVE > -1 && r.length > idx.IS_ACTIVE ? r[idx.IS_ACTIVE] === true : true,
                     quickNote: idx.OUTFIT_QUICK_NOTE !== undefined && idx.OUTFIT_QUICK_NOTE > -1 && idx.OUTFIT_QUICK_NOTE < r.length ? r[idx.OUTFIT_QUICK_NOTE] || '' : '',
                     pieces: []
                 };
             }
   
-    
             const pName = r[idx.PROD_NAME];
-            let etaDate = idx.ETA > -1 && r.length > idx.ETA ?
-            r[idx.ETA] : '';
+            let etaDate = idx.ETA > -1 && r.length > idx.ETA ? r[idx.ETA] : '';
             if (etaDate instanceof Date) {
                 etaDate = Utilities.formatDate(etaDate, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "yyyy-MM-dd");
             } else if (etaDate && typeof etaDate === 'string' && etaDate.length > 0) {
@@ -1711,23 +1659,16 @@ function getInventoryByCollection(collectionName) {
              }
 
             outfits[oName].pieces.push({
-     
                 sequence: idx.PIECE_SEQ > -1 && r.length > idx.PIECE_SEQ && r[idx.PIECE_SEQ] ? r[idx.PIECE_SEQ] : 99,
                 productName: pName,
                 category: prodCats[pName.toString().trim()] || 'Unknown',
                 sku: idx.PROD_SKU > -1 && r.length > idx.PROD_SKU ? r[idx.PROD_SKU] || '' : '',
-      
                 color: idx.COLOR > -1 && r.length > idx.COLOR ? r[idx.COLOR] || '' : '',
                 availableSizes: idx.AVAIL_SIZES > -1 && r.length > idx.AVAIL_SIZES && r[idx.AVAIL_SIZES] ? r[idx.AVAIL_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
                 eta: etaDate,
-                swapSku: idx.SWAP_SKU > -1 && 
- r.length > 
- idx.SWAP_SKU ? r[idx.SWAP_SKU] || '' : '',
-       
-                swapAvailableSizes: idx.SWAP_SIZES > -1 && r.length > idx.SWAP_SIZES && r[idx.SWAP_SIZES] ?
-                r[idx.SWAP_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
-                notes: idx.NOTES > -1 && r.length > idx.NOTES ?
-                r[idx.NOTES] || '' : ''
+                swapSku: idx.SWAP_SKU > -1 && r.length > idx.SWAP_SKU ? r[idx.SWAP_SKU] || '' : '',
+                swapAvailableSizes: idx.SWAP_SIZES > -1 && r.length > idx.SWAP_SIZES && r[idx.SWAP_SIZES] ? r[idx.SWAP_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
+                notes: idx.NOTES > -1 && r.length > idx.NOTES ? r[idx.NOTES] || '' : ''
             });
         });
         for (const oN in outfits) {
@@ -1788,7 +1729,6 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
             if (pCatUp === "BOTTOM - W/INSEAM" || pCatUp === "BOTTOM (IN) - W/INSEAM") {
                 sizeConsumingPieceCount += 2;
             } else {
-              
                 sizeConsumingPieceCount += 1;
             }
         } else if (pCatUp === sockCategory || yesNoCategories.includes(pCatUp)) {
@@ -1810,12 +1750,10 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
         const swapSizesForPiece = (p.swapAvailableSizes || []).map(s => s.toUpperCase());
         const etaString = p.eta ? ` ETA: ${p.eta}` : '';
 
-     
         if (sizedCategoryOrder.includes(pCatUp)) {
             if (pCatUp === "BOTTOM - W/INSEAM" || pCatUp === "BOTTOM (IN) - W/INSEAM") {
                  if (currentSizeIndex + 1 < requestedSizes.length) {
                     const baseSize = requestedSizes[currentSizeIndex].trim();
-                   
                     let inseamDetailFull = requestedSizes[currentSizeIndex + 1].trim();
                     
                     let cleanedInseamDescription = inseamDetailFull.replace(/"/g, '').trim();
@@ -1877,7 +1815,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
                     noteForPiece = ` (${p.category} size needed in preference)`;
                      itemsOutOfStock++;
                      overallStatusCode = Math.max(overallStatusCode, 1);
-                }
+                 }
             }
         } else if (pCatUp === sockCategory) {
              if (currentSizeIndex < requestedSizes.length) {
@@ -1988,7 +1926,6 @@ function getInventoryForOutfitUpdate(collectionName, outfitName) {
                 i > 0 &&
                 r.length > Math.max(cCol, oCol, sCol) &&
                 r[cCol]===collectionName &&
-           
                 r[oCol]===outfitName &&
                 r[sCol]===p.sku
              );
@@ -2011,8 +1948,7 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
     }
     piecesToUpdate = Array.isArray(piecesToUpdate) ? piecesToUpdate : [];
     if (piecesToUpdate.length === 0 && !imageData && newIsActiveStatus === null && newOutfitQuickNote === null) {
-        return { success: true, message: "No changes provided for inventory update."
-        };
+        return { success: true, message: "No changes provided for inventory update." };
     }
 
     Logger.log(`Updating inventory in Active SS: ${collectionName}-${outfitName}. Pieces: ${piecesToUpdate.length}, Img: ${!!imageData}, IsActive: ${newIsActiveStatus}, QuickNote: ${newOutfitQuickNote !== null}`);
@@ -2078,23 +2014,19 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
             if (!pieceData.rowIndex || pieceData.rowIndex <= 0 || pieceData.rowIndex > invData.length) {
                 Logger.log(`Skipping piece update due to invalid row index: ${pieceData.rowIndex} for SKU ${pieceData.sku || 'Unknown'}`);
                 return;
-  
             }
             const sheetRowForPiece = pieceData.rowIndex;
             const currentPieceSheetData = invData[sheetRowForPiece - 1];
 
             const updatePieceCell = (invHeaderKey, newValue) => {
                  const headerName = INV_HEADERS[invHeaderKey];
-                 const 
-                 colIdxZeroBased = headerMap[headerName];
+                 const colIdxZeroBased = headerMap[headerName];
 
                  if (colIdxZeroBased !== undefined && currentPieceSheetData.length > colIdxZeroBased) {
                     const originalStr = currentPieceSheetData[colIdxZeroBased]?.toString() ?? "";
                     let newStr = newValue?.toString() ?? "";
-      
-                     let valueToSet = 
-                    newValue;
-                     if (invHeaderKey === 'ETA' && newValue) {
+                    let valueToSet = newValue;
+                    if (invHeaderKey === 'ETA' && newValue) {
                         try {
                             const parts = newValue.split('-');
                             if (parts.length === 3) {
@@ -2115,16 +2047,14 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
                             } else {
                                 valueToSet = newValue;
                             }
-                        } catch(e){ valueToSet = newValue;
-                        }
+                        } catch(e){ valueToSet = newValue; }
                      }
                      
                     if (originalStr !== newStr) {
                          inventorySheet.getRange(sheetRowForPiece, colIdxZeroBased + 1).setValue(valueToSet);
                          updatesMadeCounter++;
                     }
-                } else { Logger.log(`Warning: Header for ${invHeaderKey} ('${headerName}') not found or row too short during piece update for SKU ${pieceData.sku}.`);
-                }
+                } else { Logger.log(`Warning: Header for ${invHeaderKey} ('${headerName}') not found or row too short during piece update for SKU ${pieceData.sku}.`); }
             };
             updatePieceCell('PROD_SKU', pieceData.sku?.toString().trim() ?? "");
             updatePieceCell('COLOR', pieceData.color?.toString().trim() ?? "");
@@ -2142,15 +2072,12 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
                 piecesUpdatedCount: piecesToUpdate.filter(p => p.rowIndex && p.rowIndex > 0).length,
                 imageChanged: imageActuallyChanged,
                 isActiveChanged: newIsActiveStatus !== null,
-    
                 quickNoteChanged: newOutfitQuickNote !== null
             };
             logActivity("INVENTORY_UPDATE", `Updated inventory for ${collectionName}-${outfitName}`, logDetails);
             return { success: true, message: `Inventory updated successfully for ${outfitName}.`, finalImageId: newImageFileId };
-            // Return finalImageId
         }
         return { success: true, message: "No changes were detected for the inventory.", finalImageId: newImageFileId };
-        // Return finalImageId even if no other changes
 
     } catch (e) {
         logError('updateInventoryItems', `Error updating inventory for ${collectionName}-${outfitName} in Active SS: ${e.message}`, e.stack);
@@ -2256,21 +2183,18 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
             newRow[headerMap[INV_HEADERS.COLLECTION]] = currentRowCollectionName;
             newRow[headerMap[INV_HEADERS.OUTFIT_NAME]] = outfitDataFromClient.outfitName;
             newRow[headerMap[INV_HEADERS.IMAGE_URL]] = imageIdToPropagate !== null ? imageIdToPropagate : currentRowImageUrl; // Use new/synced image if available, else keep this instance's image
-            newRow[headerMap[INV_HEADERS.IS_ACTIVE]] = 
-            outfitDataFromClient.newIsActiveStatus;
+            newRow[headerMap[INV_HEADERS.IS_ACTIVE]] = outfitDataFromClient.newIsActiveStatus;
             if (headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE] !== undefined) {
                 newRow[headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE]] = outfitDataFromClient.newOutfitQuickNote || "";
             }
 
             newRow[headerMap[INV_HEADERS.PIECE_SEQ]] = pieceData.sequence !== undefined ? pieceData.sequence : (pieceIndex + 1) * 10;
-            newRow[headerMap[INV_HEADERS.PROD_NAME]] = pieceData.productName ||
-            "";
+            newRow[headerMap[INV_HEADERS.PROD_NAME]] = pieceData.productName || "";
             newRow[headerMap[INV_HEADERS.PROD_SKU]] = pieceData.sku || "";
             newRow[headerMap[INV_HEADERS.COLOR]] = pieceData.color || "";
             let etaValue = pieceData.eta || "";
             if (etaValue && typeof etaValue === 'string' && etaValue.match(/^\d{4}-\d{2}-\d{2}$/)) { // Basic yyyy-MM-DD check
-                try { etaValue = new Date(etaValue);
-                } catch(e) { /* keep as string if parse fails */ }
+                try { etaValue = new Date(etaValue); } catch(e) { /* keep as string if parse fails */ }
             }
             newRow[headerMap[INV_HEADERS.ETA]] = etaValue;
             newRow[headerMap[INV_HEADERS.NOTES]] = pieceData.notes || "";
@@ -2444,7 +2368,6 @@ function getDashboardStats(collectionNamesArray) {
             if (r.length <= maxIndex) {
                  Logger.log(`Skipping short row in getDashboardStats: ${r.join(',')}. MaxIndex: ${maxIndex}, RowLength: ${r.length}`);
                  return;
-            
             }
 
             if (r[colIndices.FULFILLMENT_STATUS] === 'Remove') {
@@ -2504,19 +2427,22 @@ function getDashboardStats(collectionNamesArray) {
                 }
             }
         });
-        
         // *** NEW LOGIC STARTS HERE ***
         // Create maps for outfit images and pieces from the Inventory sheet.
         const outfitImageMap = new Map();
-        const outfitPiecesMap = new Map(); // <-- ADDED
+        const outfitPiecesMap = new Map();
+        // <-- ADDED
         const invData = inventorySheet.getDataRange().getValues();
         const invHeaders = invData[0];
         const invCollIdx = invHeaders.indexOf(INV_HEADERS.COLLECTION);
         const invOutfitNameIdx = invHeaders.indexOf(INV_HEADERS.OUTFIT_NAME);
         const invImageUrlIdx = invHeaders.indexOf(INV_HEADERS.IMAGE_URL);
-        const invProdNameIdx = invHeaders.indexOf(INV_HEADERS.PROD_NAME); // <-- ADDED
-        const invSkuIdx = invHeaders.indexOf(INV_HEADERS.PROD_SKU);       // <-- ADDED
-        const invSeqIdx = invHeaders.indexOf(INV_HEADERS.PIECE_SEQ);      // <-- ADDED
+        const invProdNameIdx = invHeaders.indexOf(INV_HEADERS.PROD_NAME);
+        // <-- ADDED
+        const invSkuIdx = invHeaders.indexOf(INV_HEADERS.PROD_SKU);
+        // <-- ADDED
+        const invSeqIdx = invHeaders.indexOf(INV_HEADERS.PIECE_SEQ);
+        // <-- ADDED
 
         if (invOutfitNameIdx > -1 && invCollIdx > -1) {
             invData.slice(1).forEach(row => {
@@ -2535,10 +2461,10 @@ function getDashboardStats(collectionNamesArray) {
                     const sku = invSkuIdx > -1 ? row[invSkuIdx] : '';
                     const sequence = invSeqIdx > -1 ? (parseInt(row[invSeqIdx], 10) || 99) : 99;
                     if(productName && sku) {
-                      if (!outfitPiecesMap.has(outfitName)) {
-                        outfitPiecesMap.set(outfitName, []);
-                      }
-                      outfitPiecesMap.get(outfitName).push({ productName, sku, sequence });
+                        if (!outfitPiecesMap.has(outfitName)) {
+                            outfitPiecesMap.set(outfitName, []);
+                        }
+                        outfitPiecesMap.get(outfitName).push({ productName, sku, sequence });
                     }
                 }
             });
@@ -2549,12 +2475,11 @@ function getDashboardStats(collectionNamesArray) {
             .sort(([, countA], [, countB]) => countB - countA)
             .slice(0, 10)
             .map(([name, count]) => ({ 
-              name, 
-              count, 
-              imageUrl: outfitImageMap.get(name) || '',
-              pieces: outfitPiecesMap.get(name) || [] // <-- ADDED
+                name, 
+                count, 
+                imageUrl: outfitImageMap.get(name) || '',
+                pieces: outfitPiecesMap.get(name) || [] // <-- ADDED
             }));
-
         stats.topShipped = Object.entries(stats.placedOutfitCounts || {})
             .sort(([, countA], [, countB]) => countB - countA)
             .slice(0, 10)
@@ -2581,21 +2506,19 @@ function getDashboardStats(collectionNamesArray) {
 
 
 function getProductsList() {
-  if (!productsSheet) { logError('getProductsList', 'Products sheet (Active SS) not found.'); return [];
-  }
-  try {
-    const data = productsSheet.getDataRange().getValues();
-    if (data.length <= 1) return [];
-    const headers = data[0].map(h => h.toString().trim());
-    const nameCol = headers.indexOf("ProductName");
-    const catCol = headers.indexOf("Category");
-    if (nameCol === -1 || catCol === -1) throw new Error("ProductName/Category columns not found in Active SS Products sheet.");
-    return data.slice(1).map(row => ({
-        productName: row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : '',
-        category: row.length > catCol && row[catCol] ? row[catCol].toString().trim() : ''
-    })).filter(p => p.productName);
-  } catch (e) { logError('getProductsList', `Error reading Active SS Products: ${e.message}`, e.stack); return [];
-  }
+    if (!productsSheet) { logError('getProductsList', 'Products sheet (Active SS) not found.'); return []; }
+    try {
+        const data = productsSheet.getDataRange().getValues();
+        if (data.length <= 1) return [];
+        const headers = data[0].map(h => h.toString().trim());
+        const nameCol = headers.indexOf("ProductName");
+        const catCol = headers.indexOf("Category");
+        if (nameCol === -1 || catCol === -1) throw new Error("ProductName/Category columns not found in Active SS Products sheet.");
+        return data.slice(1).map(row => ({
+            productName: row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : '',
+            category: row.length > catCol && row[catCol] ? row[catCol].toString().trim() : ''
+        })).filter(p => p.productName).reverse();
+    } catch (e) { logError('getProductsList', `Error reading Active SS Products: ${e.message}`, e.stack); return []; }
 }
 
 // <<< NEW FUNCTION for batch adding products >>>
@@ -2619,8 +2542,7 @@ function batchAddProductsFromUpload(fileContentString) {
 
     const uploadedRows = Utilities.parseCsv(fileContentString);
     if (!uploadedRows || uploadedRows.length === 0) {
-      return { success: true, message: "Uploaded file was empty or could not be parsed."
-      };
+      return { success: true, message: "Uploaded file was empty or could not be parsed." };
     }
 
     const potentialHeader = uploadedRows[0][0] ? uploadedRows[0][0].toString().toLowerCase() : "";
@@ -2630,14 +2552,12 @@ function batchAddProductsFromUpload(fileContentString) {
             dataRows = uploadedRows.slice(1);
             Logger.log("Batch Add Products: Detected and skipped header row in uploaded file.");
         } else {
-            return { success: true, message: "Uploaded file contained only a header row or was empty."
-            };
+            return { success: true, message: "Uploaded file contained only a header row or was empty." };
         }
     }
     
     if (dataRows.length === 0) {
-      return { success: true, message: "No data rows found in uploaded file after header check."
-      };
+      return { success: true, message: "No data rows found in uploaded file after header check." };
     }
 
     const productsSheetHeaders = productsSheet.getRange(1, 1, 1, productsSheet.getLastColumn()).getValues()[0];
@@ -2694,13 +2614,11 @@ function addNewProduct(productData) {
       logActivity("PRODUCT_ADD_DENIED", `Unauthorized attempt to add product: ${productData.productName}`);
       return { success: false, message: "Error: Not authorized." };
   }
-  if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found."
-  }; }
+  if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found." }; }
   if (!productData?.productName || !productData?.category) return { success: false, message: "Missing product name or category." };
   const productName = productData.productName.toString().trim();
   const category = productData.category.toString().trim();
-  if (!productName || !category) return { success: false, message: "Product name/category cannot be empty."
-  };
+  if (!productName || !category) return { success: false, message: "Product name/category cannot be empty." };
 
   try {
        const data = productsSheet.getDataRange().getValues();
@@ -2735,11 +2653,9 @@ function updateProductCategory(productData) {
        logActivity("PRODUCT_UPDATE_DENIED", `Unauthorized attempt to update product: ${productData.originalProductName}`);
        return { success: false, message: "Error: Not authorized." };
    }
-   if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found."
-   }; }
+   if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found." }; }
    if (!productData?.originalProductName || !productData?.productName || !productData?.category) {
-       return { success: false, message: "Missing data for product update."
-       };
+       return { success: false, message: "Missing data for product update." };
    }
    const originalName = productData.originalProductName.toString().trim();
    const newProductName = productData.productName.toString().trim();
@@ -2765,7 +2681,6 @@ function updateProductCategory(productData) {
         if (originalName.toLowerCase() !== newProductName.toLowerCase()) {
              const conflict = data.slice(1).find((r, idx) => idx !== (foundRowIndex-1) &&
                                               r.length > nameCol &&
-                 
                                                r[nameCol]?.toString().toLowerCase() === newProductName.toLowerCase());
              if (conflict) {
                 logActivity("PRODUCT_UPDATE_FAIL", `New product name conflicts: ${newProductName}`, {originalName, newProductName, newCategory});
@@ -2801,8 +2716,7 @@ function updateProductCategory(productData) {
 }
 
 function getCollectionsList() {
-    if (!collectionsSheet) { logError('getCollectionsList', 'Collections sheet (Active SS) not found.'); return [];
-    }
+    if (!collectionsSheet) { logError('getCollectionsList', 'Collections sheet (Active SS) not found.'); return []; }
     Logger.log("Fetching ALL collections from Active SS for management modal.");
     try {
         const data = collectionsSheet.getDataRange().getValues();
@@ -2820,7 +2734,7 @@ function getCollectionsList() {
             name: row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : null,
             promoCode: promoCol > -1 && row.length > promoCol && row[promoCol] ? row[promoCol].toString().trim() : "",
             isActive: activeCol > -1 && row.length > activeCol ? row[activeCol] === true : false
-        })).filter(c => c.name);
+        })).filter(c => c.name).reverse();
     } catch (e) {
         logError('getCollectionsList', `Error reading Active SS Collections for management: ${e.message}`, e.stack);
         return [];
@@ -2833,8 +2747,7 @@ function addNewCollection(collectionData) {
         logActivity("COLLECTION_ADD_DENIED", `Unauthorized attempt to add collection: ${collectionData.name}`);
         return { success: false, message: "Error: Not authorized." };
     }
-    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found."
-    }; }
+    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found." }; }
     if (!collectionData?.name) return { success: false, message: "Collection name required." };
     const name = collectionData.name.toString().trim();
     const promoCode = collectionData.promoCode?.toString().trim() ?? "";
@@ -2876,8 +2789,7 @@ function updateCollection(collectionData) {
         logActivity("COLLECTION_UPDATE_DENIED", `Unauthorized attempt to update collection: ${collectionData.originalName}`);
         return { success: false, message: "Error: Not authorized." };
     }
-    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found."
-    }; }
+    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found." }; }
     if (!collectionData?.originalName || !collectionData?.name) return { success: false, message: "Original/new name required." };
     const originalName = collectionData.originalName.toString().trim();
     const newName = collectionData.name.toString().trim();
@@ -2905,7 +2817,6 @@ function updateCollection(collectionData) {
         if (originalName.toLowerCase() !== newName.toLowerCase()) {
              const conflict = data.slice(1).find((r, idx) => idx !== (foundRowIndex-1) &&
                                               r.length > nameCol &&
-                 
                                                r[nameCol]?.toString().toLowerCase() === newName.toLowerCase());
              if (conflict) {
                 logActivity("COLLECTION_UPDATE_FAIL", `New collection name conflicts: ${newName}`, {originalName, newName, promoCode, isActive});
@@ -3021,8 +2932,7 @@ function archiveCollection(collectionNameToArchive) {
         if (!lockAcquired) {
             logError('archiveCollection', `Lock timeout for archiving ${collectionNameToArchive}.`);
             logActivity("COLLECTION_ARCHIVE_LOCK_TIMEOUT", `Lock timeout for archiving: ${collectionNameToArchive}`);
-            return { success: false, message: "Could not archive now (system busy). Please try again."
-            };
+            return { success: false, message: "Could not archive now (system busy). Please try again." };
         }
 
         if (collectionInfoToCopy) {
@@ -3057,8 +2967,7 @@ function archiveCollection(collectionNameToArchive) {
             });
             historicalOrdersSheet.getRange(historicalOrdersSheet.getLastRow() + 1, 1, adjustedOrdersToMove.length, adjustedOrdersToMove[0].length).setValues(adjustedOrdersToMove);
             Logger.log(`Copied ${ordersToMove.length} orders to Historical.`);
-        } else { Logger.log(`No orders found for "${collectionNameToArchive}" in Active sheet to copy.`);
-        }
+        } else { Logger.log(`No orders found for "${collectionNameToArchive}" in Active sheet to copy.`); }
 
         Logger.log(`Copying inventory for "${collectionNameToArchive}" to Historical.`);
         const activeInventoryDataAll = activeInventorySheet.getDataRange().getValues();
@@ -3082,8 +2991,7 @@ function archiveCollection(collectionNameToArchive) {
              });
              historicalInventorySheet.getRange(historicalInventorySheet.getLastRow() + 1, 1, adjustedInventoryToMove.length, adjustedInventoryToMove[0].length).setValues(adjustedInventoryToMove);
             Logger.log(`Copied ${inventoryToMove.length} inventory items to Historical.`);
-        } else { Logger.log(`No inventory items found for "${collectionNameToArchive}" in Active sheet to copy.`);
-        }
+        } else { Logger.log(`No inventory items found for "${collectionNameToArchive}" in Active sheet to copy.`); }
 
         if (ordersToMove.length > 0 && aoCollNameColIdx > -1) {
             Logger.log(`Deleting orders for "${collectionNameToArchive}" from Active sheet.`);
@@ -3115,8 +3023,7 @@ function archiveCollection(collectionNameToArchive) {
         Logger.log(`Deleted collection "${collectionNameToArchive}" from Active Collections sheet.`);
 
         SpreadsheetApp.flush();
-        logError('archiveCollection', `Successfully archived collection: ${collectionNameToArchive}`, 'INFO');
-        // Using logError with INFO type
+        logError('archiveCollection', `Successfully archived collection: ${collectionNameToArchive}`, 'INFO'); // Using logError with INFO type
         logActivity("COLLECTION_ARCHIVE_SUCCESS", `Archived collection: ${collectionNameToArchive}`, {ordersCopied: ordersToMove.length, inventoryCopied: inventoryToMove.length});
         scriptCache.remove('activeCollections_activeSS');
         scriptCache.remove('allCollections_activeSS');
@@ -3140,8 +3047,7 @@ function archiveCollection(collectionNameToArchive) {
 }
 
 function generateCsvData(collectionName, filters = {}) {
-   if (!ordersSheet) { return "Error: Orders sheet (Active SS) not found.";
-   }
+   if (!ordersSheet) { return "Error: Orders sheet (Active SS) not found."; }
    Logger.log(`Generating CSV from Active SS for: ${collectionName}, Filters: ${JSON.stringify(filters)}`);
    try {
        const result = getFilteredOrders(collectionName, filters, 1, 1000000);
@@ -3156,8 +3062,7 @@ function generateCsvData(collectionName, filters = {}) {
                let value = obj[header] ?? "";
                let cell = value.toString();
                if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) { 
-                   cell = 
-                   '"' + cell.replace(/"/g, '""') + '"';
+                   cell = '"' + cell.replace(/"/g, '""') + '"';
                }
                return cell;
            }).join(',') + "\r\n";
@@ -3197,14 +3102,11 @@ function generateImportCsvData(collectionName, filters = {}) {
                  email,
                  outfitOrdered
             ];
-   
               csvString += row.map(value => {
                 let cell = value.toString();
                 if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
                     cell = `"${cell.replace(/"/g, '""')}"`;
-                
                 }
-    
                 return cell;
             }).join(',') + '\r\n';
         });
@@ -3266,12 +3168,11 @@ function uploadRawDataToSheet(fileContent, fileName) {
              for (let i=0; i < expectedRawHeadersCount; i++) {
                  if (i < row.length) {
                      newRow[i] = row[i];
-      
                  }
              }
              return newRow;
          });
-        const numRowsToWrite = dataToWrite.length;
+         const numRowsToWrite = dataToWrite.length;
         if (numRowsToWrite > 0) {
             rawImportSheet.getRange(2, 1, numRowsToWrite, expectedRawHeadersCount).setValues(dataToWrite);
             SpreadsheetApp.flush();
@@ -3365,8 +3266,7 @@ function uploadAndSetBgImage(imageData) {
         PropertiesService.getScriptProperties().setProperty('PRESENTATION_BG_ID', fileId);
         return { success: true, fileId: fileId };
     }
-    return { success: false, message: "Failed to save image to drive."
-    };
+    return { success: false, message: "Failed to save image to drive." };
 }
 
 // Function to retrieve the saved background image file ID
