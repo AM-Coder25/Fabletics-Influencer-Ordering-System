@@ -1,6 +1,7 @@
 // --- Constants for Historical App ---
 const HISTORICAL_DATA_SPREADSHEET_ID = "17yJlBgE0bybDe4s7rtjKCJveaM00yjqbu_RX48WwxuQ";
-const ACTIVE_DATA_SPREADSHEET_ID = "1zULF5lL7NEOiTyaDYOzL-qPsox_qbY7S8C6nqynUzRg"; // For reading active config
+const ACTIVE_DATA_SPREADSHEET_ID = "1zULF5lL7NEOiTyaDYOzL-qPsox_qbY7S8C6nqynUzRg";
+// For reading active config
 const CONFIG_SHEET_NAME = "Config";
 const HIST_ORDERS_SHEET_NAME = "Orders";
 const HIST_INVENTORY_SHEET_NAME = "Inventory";
@@ -14,7 +15,8 @@ let histCollectionsSheet = null;
 let histProductsSheet = null;
 
 const scriptCache = CacheService.getScriptCache();
-const CACHE_EXPIRATION_SECONDS = 3600; // 1 hour
+const CACHE_EXPIRATION_SECONDS = 3600;
+// 1 hour
 
 const ORDERS_COL = {
     ORDER_ID: 1, COLLECTION_NAME: 2, SUBMITTED_DATE: 3, CONTACT: 4, STREET: 5, CITY: 6,
@@ -68,7 +70,7 @@ function initializeGlobalSheetHandles_Historical() {
     if (!historicalSS) {
         historicalSS = SpreadsheetApp.openById(HISTORICAL_DATA_SPREADSHEET_ID);
         if (!historicalSS) { Logger.log("HIST_VIEWER: ERROR - Failed to open Historical Spreadsheet. ID: " + HISTORICAL_DATA_SPREADSHEET_ID);
-historicalSS = null; return;
+            historicalSS = null; return;
         }
     }
     histCollectionsSheet = historicalSS.getSheetByName(HIST_COLLECTIONS_SHEET_NAME);
@@ -86,14 +88,14 @@ historicalSS = null; return;
     Logger.log(`HIST_VIEWER: initializeGlobalSheetHandles_Historical - CATASTROPHIC EXCEPTION: ${e.message}\nStack: ${e.stack}`);
     historicalSS = null; histCollectionsSheet = null;
     histOrdersSheet = null; histInventorySheet = null;
-histProductsSheet = null;
+    histProductsSheet = null;
   }
 }
 
 function getInitialHistoricalAppData() {
     let collectionsArray = [];
     let functionError = null;
-try {
+    try {
         if (!histCollectionsSheet) {
             initializeGlobalSheetHandles_Historical();
             if (!histCollectionsSheet) {
@@ -105,7 +107,7 @@ try {
         if (!Array.isArray(collectionsArray)) {
              Logger.log("HIST_VIEWER: getAllHistoricalCollections did NOT return an array. Forcing empty. Type: " + (typeof collectionsArray));
              collectionsArray = [];
-functionError = "Server function (getAllHistoricalCollections) returned unexpected data type.";
+             functionError = "Server function (getAllHistoricalCollections) returned unexpected data type.";
         }
         
         // Fetch dropdown options from Active Config
@@ -119,7 +121,7 @@ functionError = "Server function (getAllHistoricalCollections) returned unexpect
           isAuthorizedProcessor: true 
         };
         if (functionError) { returnData.error = true;
-returnData.message = functionError; }
+            returnData.message = functionError; }
         return returnData;
     } catch (e) {
         Logger.log(`HIST_VIEWER: getInitialHistoricalAppData - CATCH EXCEPTION: ${e.message}\nStack: ${e.stack}`);
@@ -153,8 +155,7 @@ function getDropdownOptions(optionType) {
                        .filter(r => r[typeCol - 1] === optionType && r[valueCol -1])
                        .map(r => ({
                             value: r[valueCol - 1],
-         
-                           style: styleCol > 0 ? r[styleCol-1] : null,
+                            style: styleCol > 0 ? r[styleCol-1] : null,
                             order: orderCol > 0 ? parseInt(r[orderCol - 1]) || 999 : 999
                        }));
         if (orderCol > 0) opts.sort((a, b) => a.order - b.order);
@@ -173,7 +174,7 @@ function getAllHistoricalCollections() {
         if(!histCollectionsSheet){
              Logger.log('HIST_VIEWER: getAllHistoricalCollections - CRITICAL: histCollectionsSheet NULL. Returning empty.');
              return [];
-}
+        }
     }
     try {
         const lastRow = histCollectionsSheet.getLastRow();
@@ -187,18 +188,17 @@ function getAllHistoricalCollections() {
         if (nameColIdx === -1) {
              Logger.log(`HIST_VIEWER: CRITICAL - Header "CollectionName" NOT FOUND in historical "Collections". Headers: [${headersFromSheet.join(' | ')}]`);
              return [];
-}
+        }
         const collections = data.slice(1).map(row => {
             if (row.length > nameColIdx) {
                 const collectionName = String(row[nameColIdx] || "").trim();
-if (collectionName) {
+                if (collectionName) {
                     return { name: collectionName };
-}
+                }
             }
           
            return null;
         }).filter(Boolean);
-
         collections.sort((a,b) => (a.name).localeCompare(b.name));
         return collections;
     } catch (e) {
@@ -209,37 +209,99 @@ if (collectionName) {
 
 function getHistoricalFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSize = 100) {
   initializeGlobalSheetHandles_Historical();
-  if (!histOrdersSheet) { Logger.log('getHistoricalFilteredOrders: Historical Orders sheet not initialized.');
+  if (!histOrdersSheet) {
+    Logger.log('getHistoricalFilteredOrders: Historical Orders sheet not initialized.');
     return { orders: [], totalOrderCount: 0, error: "Historical Orders data is not accessible." };
   }
   if (!collectionName) { return { orders: [], totalOrderCount: 0, error: "Collection name is required." }; }
 
   pageNumber = parseInt(pageNumber) || 1;
   pageSize = parseInt(pageSize) || 100;
+  
+  const stockFilterType = filters.stockFilter || "all";
+  let collectionInventoryForStockFilter = null;
+  if (stockFilterType === "inStock" || stockFilterType === "partialOOS") {
+      collectionInventoryForStockFilter = getHistoricalInventoryByCollection(collectionName);
+      if (!collectionInventoryForStockFilter || collectionInventoryForStockFilter.length === 0) {
+           return { orders: [], totalOrderCount: 0, pageNumber: pageNumber, pageSize: pageSize };
+      }
+  }
+
   try {
     const data = histOrdersSheet.getDataRange().getValues();
     const headers = data[0].map(h => String(h || "").trim());
-    
-    // Filtering logic adapted from main application
+
     const allValidRows = data.slice(1).filter(row => {
-        if (row.length <= ORDERS_COL.COLLECTION_NAME -1) return false;
-        if (row[ORDERS_COL.COLLECTION_NAME - 1] !== collectionName) return false;
+        // Basic collection match
+        if (row.length <= ORDERS_COL.COLLECTION_NAME -1 || row[ORDERS_COL.COLLECTION_NAME - 1] !== collectionName) return false;
         
-        // Apply other filters from the 'filters' object
+        // --- Standard Text & Dropdown Filters ---
         if (filters.owner && row[ORDERS_COL.OWNER - 1]?.toString().toLowerCase() !== filters.owner.toLowerCase()) return false;
         if (filters.nameSearch && !row[ORDERS_COL.CONTACT - 1]?.toString().toLowerCase().includes(filters.nameSearch.toLowerCase())) return false;
         if (filters.emailSearch && !row[ORDERS_COL.EMAIL - 1]?.toString().toLowerCase().includes(filters.emailSearch.toLowerCase())) return false;
-        if (filters.status && row[ORDERS_COL.FULFILLMENT_STATUS - 1] !== filters.status) return false;
         if (filters.orderIssue && row[ORDERS_COL.ORDER_ISSUE - 1] !== filters.orderIssue) return false;
-        // ... more filter conditions can be added here ...
 
+        // --- OMS Cost Filter ---
+        if (filters.omsCost) {
+            const omsCostValue = row[ORDERS_COL.OMS_COST - 1] ? parseFloat(row[ORDERS_COL.OMS_COST - 1]) : 0;
+            if (filters.omsCost === 'yes' && (!omsCostValue || omsCostValue <= 0)) return false;
+            if (filters.omsCost === 'no' && omsCostValue > 0) return false;
+        }
+        
+        // --- Missing Last Name Filter ---
+        if (filters.missingLastName === true) {
+            const contactName = row[ORDERS_COL.CONTACT - 1]?.toString().trim() || "";
+            if (contactName === "" || contactName.split(/\s+/).length > 1) return false;
+        }
+
+        // --- Stock Filter (only applies to 'Pending' orders) ---
+        if (stockFilterType === "inStock" || stockFilterType === "partialOOS") {
+            if (row[ORDERS_COL.FULFILLMENT_STATUS - 1] !== "Pending") return false;
+            let orderMatchesStockCriteria = false;
+            for (let i = 1; i <= 5; i++) { // Check up to 5 preferences
+                const prefString = row[ORDERS_COL[`PREF${i}`] - 1];
+                if (prefString) {
+                    const stockStatus = FIOSMain.getOutfitStockStatus(collectionName, prefString, collectionInventoryForStockFilter);
+                    if (stockFilterType === "inStock" && stockStatus.overallStatus === "Available") {
+                        orderMatchesStockCriteria = true; break;
+                    }
+                    if (stockFilterType === "partialOOS" && stockStatus.overallStatus === "Partial OOS") {
+                        orderMatchesStockCriteria = true; break;
+                    }
+                }
+            }
+            if (!orderMatchesStockCriteria) return false;
+        } else {
+            // Standard Status Filter (when not using a stock filter)
+            if (filters.status && row[ORDERS_COL.FULFILLMENT_STATUS - 1] !== filters.status) return false;
+        }
+        
+        // Exclude 'Remove' status unless it's the one being filtered for
+        if (row[ORDERS_COL.FULFILLMENT_STATUS - 1] === 'Remove' && filters.status !== 'Remove') {
+            return false;
+        }
+
+        // --- Date Filter ---
+        if (filters.dateRangeStart || filters.dateRangeEnd) {
+            const cellDateValue = row[ORDERS_COL.DATE_ORDERED - 1];
+            if (!(cellDateValue instanceof Date)) return false;
+            const orderDateUTC = new Date(Date.UTC(cellDateValue.getFullYear(), cellDateValue.getMonth(), cellDateValue.getDate()));
+            if (filters.dateRangeStart) {
+                const filterStartDateObj = new Date(filters.dateRangeStart);
+                if (isNaN(filterStartDateObj.getTime()) || orderDateUTC.getTime() < filterStartDateObj.getTime()) return false;
+            }
+            if (filters.dateRangeEnd) {
+                const filterEndDateObj = new Date(filters.dateRangeEnd);
+                if (isNaN(filterEndDateObj.getTime()) || orderDateUTC.getTime() > filterEndDateObj.getTime()) return false;
+            }
+        }
+        
         return true;
     });
 
     const totalOrderCount = allValidRows.length;
     const startIndex = (pageNumber - 1) * pageSize;
     const paginatedRows = allValidRows.slice(startIndex, startIndex + pageSize);
-    
     const resultOrders = paginatedRows.map(row => {
         let dateOrderedString = row[ORDERS_COL.DATE_ORDERED-1];
         if (dateOrderedString instanceof Date) { dateOrderedString = Utilities.formatDate(dateOrderedString, historicalSS.getSpreadsheetTimeZone(), "MM/dd/yyyy"); }
@@ -251,7 +313,6 @@ function getHistoricalFilteredOrders(collectionName, filters = {}, pageNumber = 
             owner: String(row[ORDERS_COL.OWNER - 1] || ''),
             status: String(row[ORDERS_COL.FULFILLMENT_STATUS - 1] || 'N/A'), 
             dateOrdered: dateOrderedString || '---',
-            // MODIFICATION: Added outfitOrdered
             outfitOrdered: String(row[ORDERS_COL.OUTFIT_ORDERED - 1] || '---'),
             omsId: String(row[ORDERS_COL.OMS_ID - 1] || '---')
         };
@@ -277,10 +338,8 @@ function getHistoricalOrderDetails(orderId) {
 
         const orderRow = ordersData[orderRowIndex];
         const collectionName = orderRow[ORDERS_COL.COLLECTION_NAME - 1];
-        
         // Get historical inventory for stock checking
-        const collectionInventory = getHistoricalInventoryByCollection(collectionName); 
-        
+        const collectionInventory = getHistoricalInventoryByCollection(collectionName);
         const orderData = {};
         for (const key in ORDERS_COL) {
             const colIdx = ORDERS_COL[key] - 1;
@@ -305,6 +364,7 @@ function getHistoricalOrderDetails(orderId) {
             INSEAM: orderData.inseam,
             OutfitUnavailableNotes: orderData.unavailable_notes,
             GeneralNotes: orderData.general_notes,
+ 
             OutfitsRawOriginal: orderData.outfits_raw_original,
             OutfitOrdered: orderData.outfit_ordered,
             DateOrdered: orderData.date_ordered,
@@ -312,9 +372,9 @@ function getHistoricalOrderDetails(orderId) {
             FulfillmentStatus: orderData.fulfillment_status, OrderIssue: orderData.order_issue,
             PromoCodeUsedDisplay: orderData.promo_code,
             Swap: orderData.swap,
-            preferenceStockStatus: [] // To be populated below
+      
+             preferenceStockStatus: [] // To be populated below
         };
-
         if (collectionName) {
             for (let i = 1; i <= 5; i++) {
                 const prefKey = `pref${i}`;
@@ -322,12 +382,12 @@ function getHistoricalOrderDetails(orderId) {
                 if (prefString) {
                     // Re-use the main app's stock status logic by passing the historical inventory
                     const stock = FIOSMain.getOutfitStockStatus(collectionName, prefString, collectionInventory);
-                    
                     let imgUrl = "";
                     const outfitNameFromPref = prefString.match(/^(.*?)\s*\(/)?.[1].trim() ?? prefString.trim();
                     const inventoryOutfit = collectionInventory.find(inv => inv.name === outfitNameFromPref);
                     if (inventoryOutfit) imgUrl = inventoryOutfit.imageUrl || "";
                   
+                    
                     stock.imageUrl = imgUrl;
                     stock.outfitActive = inventoryOutfit ? inventoryOutfit.isActive : true;
                     finalData.preferenceStockStatus.push(stock);
@@ -336,7 +396,8 @@ function getHistoricalOrderDetails(orderId) {
         }
         return finalData;
 
-    } catch (e) {
+    } catch (e) 
+    {
         Logger.log(`HIST_VIEWER: Error getting historical order details for ${orderId}: ${e.message}`);
         return null;
     }
@@ -353,7 +414,6 @@ function getHistoricalDashboardStats(collectionName) {
         totalOrders: 0,
         statusCounts: {}
     };
-
     try {
         const data = histOrdersSheet.getDataRange().getValues();
         const headers = data[0];
@@ -386,8 +446,7 @@ function getHistoricalDashboardStats(collectionName) {
 function updateHistoricalOrder(orderDataFromClient) {
   initializeGlobalSheetHandles_Historical();
   if (!histOrdersSheet || !orderDataFromClient || !orderDataFromClient.OrderID) {
-    return { success: false, message: "Invalid request or missing OrderID."
-    };
+    return { success: false, message: "Invalid request or missing OrderID." };
   }
 
   const lock = LockService.getScriptLock();
@@ -395,8 +454,7 @@ function updateHistoricalOrder(orderDataFromClient) {
   try {
     lockAcquired = lock.tryLock(15000);
     if (!lockAcquired) {
-      return { success: false, message: "Could not update now (concurrent edit). Please try again."
-      };
+      return { success: false, message: "Could not update now (concurrent edit). Please try again." };
     }
 
     const data = histOrdersSheet.getDataRange().getValues();
@@ -419,7 +477,7 @@ function updateHistoricalOrder(orderDataFromClient) {
         'OMS_ID': 'OMS_ID', 'OMS_Cost': 'OMS_COST', 'DateOrdered': 'DATE_ORDERED' 
         // ... etc
  
-       };
+    };
 
     for (const clientKey in orderDataFromClient) {
         let sheetHeaderNameForKey = null;
@@ -466,8 +524,7 @@ function updateHistoricalOrder(orderDataFromClient) {
 }
 
 function generateHistoricalCsvData(collectionName, filters = {}) {
-   if (!histOrdersSheet) { return "Error: Historical Orders sheet not found.";
-   }
+   if (!histOrdersSheet) { return "Error: Historical Orders sheet not found."; }
    try {
        const result = getHistoricalFilteredOrders(collectionName, filters, 1, 50000);
        // High limit for export
@@ -485,6 +542,7 @@ function generateHistoricalCsvData(collectionName, filters = {}) {
                let cell = value.toString();
                if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) { 
                    cell = '"' + 
+ 
                    cell.replace(/"/g, '""') + '"';
                }
                return cell;
@@ -500,7 +558,7 @@ function generateHistoricalCsvData(collectionName, filters = {}) {
 // Keep existing inventory and utility functions as they are needed
 function getHistoricalInventoryByCollection(collectionName) {
   if (!histInventorySheet) { initializeGlobalSheetHandles_Historical();
-    if(!histInventorySheet){ Logger.log('HIST_VIEWER: Inventory sheet not initialized for collection view.'); return [];
+  if(!histInventorySheet){ Logger.log('HIST_VIEWER: Inventory sheet not initialized for collection view.'); return [];
   }}
   if (!collectionName) { Logger.log('HIST_VIEWER: Collection name required for inventory.'); return [];
   }
@@ -512,25 +570,25 @@ function getHistoricalInventoryByCollection(collectionName) {
     }
     const invHeaders = invHeadersRaw.map(h => String(h || "").trim());
     const idx = {};
-let headersValid = true;
+    let headersValid = true;
     for (const key in INV_HEADERS) {
         const headerName = INV_HEADERS[key];
         const colIndex = invHeaders.indexOf(headerName);
         if (colIndex === -1) {
             Logger.log(`HIST_VIEWER: Inventory Header '${headerName}' (key: ${key}) not found. Headers: ${invHeaders.join(', ')}`);
             if (['COLLECTION', 'OUTFIT_NAME', 'PROD_NAME'].includes(key.toUpperCase())) headersValid = false;
-}
+        }
         idx[key] = colIndex;
     }
     if (!headersValid) {
         Logger.log("HIST_VIEWER: Critical columns missing in Historical Inventory. Cannot proceed.");
         throw new Error("Critical column(s) missing in Historical Inventory headers.");
-}
+    }
     const outfits = {};
     invData.slice(1)
       .filter(r => idx.COLLECTION > -1 && String(r[idx.COLLECTION] || "").trim() === collectionName)
       .forEach(r => {
-   const oName = String(r[idx.OUTFIT_NAME]).trim();
+        const oName = String(r[idx.OUTFIT_NAME]).trim();
         if (!oName || !r[idx.PROD_NAME]) return;
         if (!outfits[oName]) {
           outfits[oName] = {
@@ -542,19 +600,17 @@ let headersValid = true;
        }
         const pName = String(r[idx.PROD_NAME]).trim(); let etaDate = idx.ETA > -1 ? r[idx.ETA] : '';
         if (etaDate instanceof Date) { etaDate = Utilities.formatDate(etaDate, historicalSS.getSpreadsheetTimeZone(), "yyyy-MM-dd");
-}
+        }
         outfits[oName].pieces.push({
-          productName: pName,
+    
+           productName: pName,
      
            category: prodCats[pName] || 'Unknown', sku: idx.PROD_SKU > -1 && r[idx.PROD_SKU] ? String(r[idx.PROD_SKU]).trim() : '',
-          color: idx.COLOR > -1 && r[idx.COLOR] ?
-          String(r[idx.COLOR]).trim() : '',
-          availableSizes: idx.AVAIL_SIZES > -1 && r[idx.AVAIL_SIZES] ?
-          String(r[idx.AVAIL_SIZES]).split(',').map(s => s.trim()).filter(s => s) : [],
-          eta: etaDate ||
-          ''
+          color: idx.COLOR > -1 && r[idx.COLOR] ? String(r[idx.COLOR]).trim() : '',
+          availableSizes: idx.AVAIL_SIZES > -1 && r[idx.AVAIL_SIZES] ? String(r[idx.AVAIL_SIZES]).split(',').map(s => s.trim()).filter(s => s) : [],
+          eta: etaDate || ''
         });
-});
+    });
     for (const oN in outfits) { outfits[oN].pieces.sort((a, b) => (a.sequence || 999) - (b.sequence || 999));
     }
     return Object.values(outfits).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
@@ -574,9 +630,9 @@ function getImageData_Historical(fileId) {
   }
   try {
     const file = DriveApp.getFileById(fileId);
-const blob = file.getBlob();
+    const blob = file.getBlob();
     return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: blob.getContentType() };
-} catch (err) {
+  } catch (err) {
     Logger.log(`HIST_VIEWER: Error getting image data (Historical) for ID "${fileId}": ${err.message}. Details: ${err.toString()}.`);
     return null;
   }
@@ -585,15 +641,14 @@ function getHistoricalProductCategories() {
     if (!histProductsSheet) { return {};
     }
     const cacheKey = 'historicalProductCategories_v3'; const cached = scriptCache.get(cacheKey);
-if (cached) { try { return JSON.parse(cached);
-    } catch(e){ /* ignore */ } }
+    if (cached) { try { return JSON.parse(cached); } catch(e){ /* ignore */ } }
     const cats = {};
     try {
         const data = histProductsSheet.getDataRange().getValues();
-if (data.length <=1) return {};
+        if (data.length <=1) return {};
         const headers = data[0].map(h => String(h || "").trim().toLowerCase());
         const nameCol = headers.indexOf("productname");
-const catCol = headers.indexOf("category");
+        const catCol = headers.indexOf("category");
         if (nameCol > -1 && catCol > -1) {
             data.slice(1).forEach(r => {
                 const productName = String(r[nameCol] || "").trim();
@@ -602,7 +657,6 @@ const catCol = headers.indexOf("category");
             if (Object.keys(cats).length > 0) { scriptCache.put(cacheKey, JSON.stringify(cats), CACHE_EXPIRATION_SECONDS * 2);
             }
         }
-    } catch (e) { Logger.log(`HIST_VIEWER: Error reading Historical Products for cats: ${e.message}`);
-    }
+    } catch (e) { Logger.log(`HIST_VIEWER: Error reading Historical Products for cats: ${e.message}`); }
     return cats;
 }
