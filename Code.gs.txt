@@ -1005,8 +1005,7 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                     filterStartDateObj = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
                     if (isNaN(filterStartDateObj.getTime())) filterStartDateObj = null;
                 }
-            } catch (e) { filterStartDateObj = null;
-            }
+            } catch (e) { filterStartDateObj = null; }
         }
         if (filters.dateRangeEnd) {
             try {
@@ -1015,8 +1014,7 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                     filterEndDateObj = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
                     if (isNaN(filterEndDateObj.getTime())) filterEndDateObj = null;
                 }
-            } catch (e) { filterEndDateObj = null;
-            }
+            } catch (e) { filterEndDateObj = null; }
         }
 
         const emailFilterLower = filters.emailSearch?.toString().toLowerCase().trim();
@@ -1027,12 +1025,12 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
         const unavailableNotesFilter = filters.unavailableNotes?.toString().trim();
         const omsCostFilter = filters.omsCost;
         const missingLastNameFilter = filters.missingLastName === true;
+        
         const allValidRows = data.slice(1).filter(row => {
             if (row.length <= Math.max(...Object.values(indices).filter(v => v !== undefined && v !== null))) return false;
             
-            if (row[indices.FulfillmentStatus] === 'Remove') {
-                return false;
-            }
+            // MODIFICATION: The hardcoded exclusion of 'Remove' status orders is now gone from here.
+            // The status filter below will handle showing ONLY 'Remove' when selected, or excluding it otherwise.
        
             if (row[indices.CollectionName] !== collectionName) return false;
 
@@ -1052,7 +1050,8 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
             }
 
             if (omsCostFilter) {
-                const omsCostValue = row[indices.OMS_Cost] ? parseFloat(row[indices.OMS_Cost]) : 0;
+                const omsCostValue = row[indices.OMS_Cost] ?
+                parseFloat(row[indices.OMS_Cost]) : 0;
                 if (omsCostFilter === 'yes' && (!omsCostValue || omsCostValue <= 0)) {
                     return false;
                 }
@@ -1088,7 +1087,13 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                 }
                 if (!orderMatchesStockCriteria) return false;
             } else {
+                // This is the main status filter logic that will now correctly handle 'Remove'.
                 if (filters.status && row[indices.FulfillmentStatus] !== filters.status) return false;
+            }
+
+            // MODIFICATION: Exclude "Remove" status from general view unless it is the selected filter.
+            if (row[indices.FulfillmentStatus] === 'Remove' && filters.status !== 'Remove') {
+                return false;
             }
 
             if (filterStartDateObj || filterEndDateObj) {
@@ -1128,7 +1133,8 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                 dateOrdered: indices.DateOrdered !== undefined && row[indices.DateOrdered] instanceof Date ? Utilities.formatDate(row[indices.DateOrdered], Session.getScriptTimeZone(), "MM/dd/yyyy") : "",
                 outfitOrdered: indices.OutfitOrdered !== undefined && row.length > indices.OutfitOrdered ? row[indices.OutfitOrdered] : "",
                 omsId: row[indices.OMS_ID],
-                isDuplicate: emailForDupCheck ? (emailCounts[emailForDupCheck] > 1) : false
+                isDuplicate: emailForDupCheck ?
+                (emailCounts[emailForDupCheck] > 1) : false
             };
             return orderResult;
         });
@@ -1205,6 +1211,7 @@ function getOrderDetails(orderId) {
                   if (inventoryOutfit) imgUrl = inventoryOutfit.imageUrl || "";
                 
                   stock.imageUrl = imgUrl;
+      
                   stock.outfitActive = inventoryOutfit ? inventoryOutfit.isActive : true;
                   finalData.preferenceStockStatus.push(stock);
               }
@@ -1253,7 +1260,7 @@ function getDuplicateOrderInfo(collectionName, email, currentOrderId) {
              }
          }
          return { isDuplicate: foundCount > 1, otherOrderIds: otherOrderIds };
-     } catch (e) {
+    } catch (e) {
          logError('getDuplicateOrderInfo', `Error checking duplicates (Active SS) for ${collectionName}/${email}: ${e.message}`, e.stack);
          return { isDuplicate: false, otherOrderIds: [] };
     }
@@ -1282,7 +1289,8 @@ function getDropdownOptions(optionType) {
                        .filter(r => r[typeCol - 1] === optionType && r[valueCol -1])
                        .map(r => ({
                             value: r[valueCol - 1],
-                            style: styleCol > 0 && r.length >= styleCol ? r[styleCol-1] : null,
+         
+                           style: styleCol > 0 && r.length >= styleCol ? r[styleCol-1] : null,
                             order: orderCol > 0 && r.length >= orderCol ? parseInt(r[orderCol - 1]) || 999 : 999
                        }));
         if (orderCol > 0) opts.sort((a, b) => a.order - b.order);
@@ -1527,12 +1535,14 @@ function addNewOutfit(outfitData) {
              row[headerMap[INV_HEADERS.COLLECTION]-1] = outfitData.collectionName;
              row[headerMap[INV_HEADERS.OUTFIT_NAME]-1] = outfitData.outfitName;
              row[headerMap[INV_HEADERS.IMAGE_URL]-1] = imageFileId;
+   
              if (headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE]) {
                 row[headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE]-1] = outfitData.quickNote || "";
              }
              row[headerMap[INV_HEADERS.PIECE_SEQ]-1] = piece.sequence || (index + 1) * 10;
              row[headerMap[INV_HEADERS.PROD_NAME]-1] = piece.productName||"";
              row[headerMap[INV_HEADERS.PROD_SKU]-1] = piece.sku||"";
+    
              row[headerMap[INV_HEADERS.COLOR]-1] = piece.color||"";
         
              const catUpper = (piece.category || '').toUpperCase();
@@ -1629,7 +1639,8 @@ function getInventoryByCollection(collectionName) {
           .forEach(r => {
             const oName = r[idx.OUTFIT_NAME];
             if (!outfits[oName]) {
-                 outfits[oName] = {
+      
+                   outfits[oName] = {
                     name: oName,
                     imageUrl: idx.IMAGE_URL > -1 && r.length > idx.IMAGE_URL ? r[idx.IMAGE_URL] || '' : '',
                     isActive: idx.IS_ACTIVE > -1 && r.length > idx.IS_ACTIVE ? r[idx.IS_ACTIVE] === true : true,
@@ -1638,6 +1649,7 @@ function getInventoryByCollection(collectionName) {
                 };
             }
   
+            
             const pName = r[idx.PROD_NAME];
             let etaDate = idx.ETA > -1 && r.length > idx.ETA ? r[idx.ETA] : '';
             if (etaDate instanceof Date) {
@@ -1660,16 +1672,21 @@ function getInventoryByCollection(collectionName) {
              }
 
             outfits[oName].pieces.push({
-                sequence: idx.PIECE_SEQ > -1 && r.length > idx.PIECE_SEQ && r[idx.PIECE_SEQ] ? r[idx.PIECE_SEQ] : 99,
+     
+                       sequence: idx.PIECE_SEQ > -1 && r.length > idx.PIECE_SEQ && r[idx.PIECE_SEQ] ? r[idx.PIECE_SEQ] : 99,
                 productName: pName,
                 category: prodCats[pName.toString().trim()] || 'Unknown',
                 sku: idx.PROD_SKU > -1 && r.length > idx.PROD_SKU ? r[idx.PROD_SKU] || '' : '',
-                color: idx.COLOR > -1 && r.length > idx.COLOR ? r[idx.COLOR] || '' : '',
+           
+                 color: idx.COLOR > -1 && r.length > idx.COLOR ? r[idx.COLOR] || '' : '',
                 availableSizes: idx.AVAIL_SIZES > -1 && r.length > idx.AVAIL_SIZES && r[idx.AVAIL_SIZES] ? r[idx.AVAIL_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
                 eta: etaDate,
                 swapSku: idx.SWAP_SKU > -1 && r.length > idx.SWAP_SKU ? r[idx.SWAP_SKU] || '' : '',
-                swapAvailableSizes: idx.SWAP_SIZES > -1 && r.length > idx.SWAP_SIZES ? r[idx.SWAP_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
-                notes: idx.NOTES > -1 && r.length > idx.NOTES ? r[idx.NOTES] || '' : ''
+       
+                         swapAvailableSizes: idx.SWAP_SIZES > -1 && r.length > idx.SWAP_SIZES ?
+                r[idx.SWAP_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
+                notes: idx.NOTES > -1 && r.length > idx.NOTES ?
+                r[idx.NOTES] || '' : ''
             });
         });
         for (const oN in outfits) {
@@ -1730,7 +1747,8 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
             if (pCatUp === "BOTTOM - W/INSEAM" || pCatUp === "BOTTOM (IN) - W/INSEAM") {
                 sizeConsumingPieceCount += 2;
             } else {
-                 sizeConsumingPieceCount += 1;
+              
+               sizeConsumingPieceCount += 1;
             }
         } else if (pCatUp === sockCategory || yesNoCategories.includes(pCatUp)) {
             sizeConsumingPieceCount += 1;
@@ -1756,6 +1774,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
             if (pCatUp === "BOTTOM - W/INSEAM" || pCatUp === "BOTTOM (IN) - W/INSEAM") {
                  if (currentSizeIndex + 1 < requestedSizes.length) {
                     const baseSize = requestedSizes[currentSizeIndex].trim();
+                   
                     let inseamDetailFull = requestedSizes[currentSizeIndex + 1].trim();
                     
                     let cleanedInseamDescription = inseamDetailFull.replace(/"/g, '').trim();
@@ -1805,7 +1824,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
                              currentPieceStatus = "OK (Swap)";
                              noteForPiece = ` (Swap SKU: ${p.swapSku})`;
                              overallStatusCode = Math.max(overallStatusCode, 1);
-                        } else {
+                         } else {
                              currentPieceStatus = "OOS";
                              noteForPiece = ` (OOS${etaString})`;
                              itemsOutOfStock++;
@@ -1817,7 +1836,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
                     noteForPiece = ` (${p.category} size needed in preference)`;
                      itemsOutOfStock++;
                      overallStatusCode = Math.max(overallStatusCode, 1);
-                }
+                 }
             }
         } else if (pCatUp === sockCategory) {
              if (currentSizeIndex < requestedSizes.length) {
@@ -1928,13 +1947,15 @@ function getInventoryForOutfitUpdate(collectionName, outfitName) {
                 i > 0 &&
                 r.length > Math.max(cCol, oCol, sCol) &&
                 r[cCol]===collectionName &&
-                r[oCol]===outfitName &&
+           
+                 r[oCol]===outfitName &&
                 r[sCol]===p.sku
              );
              p.rowIndex = rIdx !== -1 ? rIdx + 1 : 0;
              if(p.rowIndex===0) Logger.log(`Warning (Active SS Inv Update): Row not found for ${outfitName}-SKU:${p.sku}. This piece cannot be updated by its 
  original SKU if it changed.`);
-        });
+      
+          });
         return targetOutfit;
     } catch(e){
         logError('getInventoryForOutfitUpdate', `Error fetching inventory for update ${collectionName}-${outfitName} from Active SS: ${e.message}`, e.stack);
@@ -1949,7 +1970,8 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
     }
     piecesToUpdate = Array.isArray(piecesToUpdate) ? piecesToUpdate : [];
     if (piecesToUpdate.length === 0 && !imageData && newIsActiveStatus === null && newOutfitQuickNote === null) {
-        return { success: true, message: "No changes provided for inventory update." };
+        return { success: true, message: "No changes provided for inventory update."
+        };
     }
 
     Logger.log(`Updating inventory in Active SS: ${collectionName}-${outfitName}. Pieces: ${piecesToUpdate.length}, Img: ${!!imageData}, IsActive: ${newIsActiveStatus}, QuickNote: ${newOutfitQuickNote !== null}`);
@@ -2015,13 +2037,15 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
             if (!pieceData.rowIndex || pieceData.rowIndex <= 0 || pieceData.rowIndex > invData.length) {
                 Logger.log(`Skipping piece update due to invalid row index: ${pieceData.rowIndex} for SKU ${pieceData.sku || 'Unknown'}`);
                 return;
-            }
+  
+           }
             const sheetRowForPiece = pieceData.rowIndex;
             const currentPieceSheetData = invData[sheetRowForPiece - 1];
 
             const updatePieceCell = (invHeaderKey, newValue) => {
                  const headerName = INV_HEADERS[invHeaderKey];
-                 const colIdxZeroBased = headerMap[headerName];
+                 const colIdxZeroBased = 
+                 headerMap[headerName];
 
                  if (colIdxZeroBased !== undefined && currentPieceSheetData.length > colIdxZeroBased) {
                     const originalStr = currentPieceSheetData[colIdxZeroBased]?.toString() ?? "";
@@ -2075,6 +2099,7 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
                 piecesUpdatedCount: piecesToUpdate.filter(p => p.rowIndex && p.rowIndex > 0).length,
                 imageChanged: imageActuallyChanged,
                 isActiveChanged: newIsActiveStatus !== null,
+    
                 quickNoteChanged: newOutfitQuickNote !== null
             };
             logActivity("INVENTORY_UPDATE", `Updated inventory for ${collectionName}-${outfitName}`, logDetails);
@@ -2185,7 +2210,8 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
             newRow[headerMap[INV_HEADERS.COLLECTION]] = currentRowCollectionName;
             newRow[headerMap[INV_HEADERS.OUTFIT_NAME]] = outfitDataFromClient.outfitName;
             newRow[headerMap[INV_HEADERS.IMAGE_URL]] = imageIdToPropagate !== null ? imageIdToPropagate : currentRowImageUrl; // Use new/synced image if available, else keep this instance's image
-            newRow[headerMap[INV_HEADERS.IS_ACTIVE]] = outfitDataFromClient.newIsActiveStatus;
+            newRow[headerMap[INV_HEADERS.IS_ACTIVE]] = 
+            outfitDataFromClient.newIsActiveStatus;
             if (headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE] !== undefined) {
                 newRow[headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE]] = outfitDataFromClient.newOutfitQuickNote || "";
             }
@@ -2195,8 +2221,9 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
             newRow[headerMap[INV_HEADERS.PROD_SKU]] = pieceData.sku || "";
             newRow[headerMap[INV_HEADERS.COLOR]] = pieceData.color || "";
             let etaValue = pieceData.eta || "";
-            if (etaValue && typeof etaValue === 'string' && etaValue.match(/^\d{4}-\d{2}-\d{2}$/)) { // Basic yyyy-MM-DD check
-                try { etaValue = new Date(etaValue); } catch(e) { /* keep as string if parse fails */ }
+            if (etaValue && typeof etaValue === 'string' && etaValue.match(/^\d{4}-\d{2}-\d{2}$/)) { // Basic<x_bin_880>-MM-DD check
+                try { etaValue = new Date(etaValue);
+                } catch(e) { /* keep as string if parse fails */ }
             }
             newRow[headerMap[INV_HEADERS.ETA]] = etaValue;
             newRow[headerMap[INV_HEADERS.NOTES]] = pieceData.notes || "";
@@ -2227,9 +2254,9 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
         Logger.log(`SYNC: No active collections found containing the outfit "${outfitDataFromClient.outfitName}" to sync updates to (beyond potentially the original collection if it was active).`);
         // If the original collection was active and processed, outfitsSyncedCount would be at least 1.
          // If outfitsSyncedCount is 0, it means the original collection was not active, or no other active collections had the outfit.
-         // The primary update for the original collection is handled by `updateInventoryItems`.
+        // The primary update for the original collection is handled by `updateInventoryItems`.
          // This sync function's main job is propagation.
-         // If no propagation targets, it's fine.
+        // If no propagation targets, it's fine.
     }
 
     logActivity("OUTFIT_SYNC_ACROSS_COLLECTIONS", `Synced outfit: ${outfitDataFromClient.outfitName}`, {
@@ -2363,13 +2390,14 @@ function getDashboardStats(collectionNamesArray) {
         }
          if (colIndices.COLLECTION_NAME === undefined || colIndices.FULFILLMENT_STATUS === undefined) {
              throw new Error("Critical column indices (COLLECTION_NAME or FULFILLMENT_STATUS) could not be determined. Dashboard stats cannot be calculated.");
-        }
+         }
 
         data.slice(1).forEach(r => {
             const maxIndex = Math.max(...Object.values(colIndices).filter(v => v !== undefined));
             if (r.length <= maxIndex) {
                  Logger.log(`Skipping short row in getDashboardStats: ${r.join(',')}. MaxIndex: ${maxIndex}, RowLength: ${r.length}`);
                  return;
+            
             }
 
             if (r[colIndices.FULFILLMENT_STATUS] === 'Remove') {
@@ -2379,6 +2407,7 @@ function getDashboardStats(collectionNamesArray) {
             if (collectionNamesArray.includes(r[colIndices.COLLECTION_NAME])) {
                 stats.totalOrders++;
              
+            
                 const currentStatus = r[colIndices.FULFILLMENT_STATUS] || 'Unknown';
     
                 const currentOwner = colIndices.OWNER !== undefined && r[colIndices.OWNER] ? r[colIndices.OWNER].toString().trim() : 'Unassigned';
@@ -2451,10 +2480,12 @@ function getDashboardStats(collectionNamesArray) {
                 const collName = row[invCollIdx];
                 const outfitName = row[invOutfitNameIdx];
                 
+              
                 if (outfitName && collectionNamesArray.includes(collName)) {
                     // Map Image URL
                     const imageUrl = invImageUrlIdx > -1 ? row[invImageUrlIdx] : '';
                     if (imageUrl && !outfitImageMap.has(outfitName)) {
+                  
                         outfitImageMap.set(outfitName, imageUrl);
                     }
                     
@@ -2463,6 +2494,7 @@ function getDashboardStats(collectionNamesArray) {
                     const sku = invSkuIdx > -1 ? row[invSkuIdx] : '';
                     const sequence = invSeqIdx > -1 ? (parseInt(row[invSeqIdx], 10) || 99) : 99;
                     if(productName && sku) {
+                
                         if (!outfitPiecesMap.has(outfitName)) {
                             outfitPiecesMap.set(outfitName, []);
                         }
@@ -2477,6 +2509,7 @@ function getDashboardStats(collectionNamesArray) {
             .sort(([, countA], [, countB]) => countB - countA)
             .slice(0, 10)
             .map(([name, count]) => ({ 
+          
                 name, 
                 count, 
                 imageUrl: outfitImageMap.get(name) || '',
@@ -2489,7 +2522,8 @@ function getDashboardStats(collectionNamesArray) {
               name, 
               count, 
               imageUrl: outfitImageMap.get(name) || '',
-               pieces: outfitPiecesMap.get(name) || [] // <-- ADDED
+ 
+              pieces: outfitPiecesMap.get(name) || [] // <-- ADDED
             }));
         // *** NEW LOGIC ENDS HERE ***
 
@@ -2546,7 +2580,8 @@ function batchAddProductsFromUpload(fileContentString) {
 
     const uploadedRows = Utilities.parseCsv(fileContentString);
     if (!uploadedRows || uploadedRows.length === 0) {
-      return { success: true, message: "Uploaded file was empty or could not be parsed." };
+      return { success: true, message: "Uploaded file was empty or could not be parsed."
+      };
     }
 
     const potentialHeader = uploadedRows[0][0] ? uploadedRows[0][0].toString().toLowerCase() : "";
@@ -2556,12 +2591,14 @@ function batchAddProductsFromUpload(fileContentString) {
             dataRows = uploadedRows.slice(1);
             Logger.log("Batch Add Products: Detected and skipped header row in uploaded file.");
         } else {
-            return { success: true, message: "Uploaded file contained only a header row or was empty." };
+            return { success: true, message: "Uploaded file contained only a header row or was empty."
+            };
         }
     }
     
     if (dataRows.length === 0) {
-      return { success: true, message: "No data rows found in uploaded file after header check." };
+      return { success: true, message: "No data rows found in uploaded file after header check."
+      };
     }
 
     const productsSheetHeaders = productsSheet.getRange(1, 1, 1, productsSheet.getLastColumn()).getValues()[0];
@@ -2582,6 +2619,7 @@ function batchAddProductsFromUpload(fileContentString) {
           newSheetRow[nameColSheetIdx] = productName;
           newSheetRow[catColSheetIdx] = category;
         
+ 
           productsToActuallyAdd.push(newSheetRow);
           existingProductNamesLower.add(productName.toLowerCase());
         } else {
@@ -2618,11 +2656,13 @@ function addNewProduct(productData) {
       logActivity("PRODUCT_ADD_DENIED", `Unauthorized attempt to add product: ${productData.productName}`);
       return { success: false, message: "Error: Not authorized." };
   }
-  if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found." }; }
+  if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found."
+  }; }
   if (!productData?.productName || !productData?.category) return { success: false, message: "Missing product name or category." };
   const productName = productData.productName.toString().trim();
   const category = productData.category.toString().trim();
-  if (!productName || !category) return { success: false, message: "Product name/category cannot be empty." };
+  if (!productName || !category) return { success: false, message: "Product name/category cannot be empty."
+  };
 
   try {
        const data = productsSheet.getDataRange().getValues();
@@ -2657,9 +2697,11 @@ function updateProductCategory(productData) {
        logActivity("PRODUCT_UPDATE_DENIED", `Unauthorized attempt to update product: ${productData.originalProductName}`);
        return { success: false, message: "Error: Not authorized." };
    }
-   if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found." }; }
+   if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found."
+   }; }
    if (!productData?.originalProductName || !productData?.productName || !productData?.category) {
-       return { success: false, message: "Missing data for product update." };
+       return { success: false, message: "Missing data for product update."
+       };
    }
    const originalName = productData.originalProductName.toString().trim();
    const newProductName = productData.productName.toString().trim();
@@ -2685,11 +2727,12 @@ function updateProductCategory(productData) {
         if (originalName.toLowerCase() !== newProductName.toLowerCase()) {
              const conflict = data.slice(1).find((r, idx) => idx !== (foundRowIndex-1) &&
                                               r.length > nameCol &&
+                 
                                               r[nameCol]?.toString().toLowerCase() === newProductName.toLowerCase());
-             if (conflict) {
+                                              if (conflict) {
                 logActivity("PRODUCT_UPDATE_FAIL", `New product name conflicts: ${newProductName}`, {originalName, newProductName, newCategory});
                 return { success: false, message: `New product name "${newProductName}" already exists.` };
-             }
+                                              }
         }
 
         const sheetRowToUpdate = foundRowIndex + 1;
@@ -2720,30 +2763,72 @@ function updateProductCategory(productData) {
 }
 
 function getCollectionsList() {
-    if (!collectionsSheet) { logError('getCollectionsList', 'Collections sheet (Active SS) not found.'); return [];
-    }
-    Logger.log("Fetching ALL collections from Active SS for management modal.");
-    try {
-        const data = collectionsSheet.getDataRange().getValues();
-        if (data.length <= 1) return [];
-        const headers = data[0].map(h => h.toString().trim());
-        const nameCol = headers.indexOf("CollectionName");
-        const promoCol = headers.indexOf("PromoCode");
-        const activeCol = headers.indexOf("IsActive");
-        if (nameCol === -1 || activeCol === -1 ) {
-             logError('getCollectionsList', 'CollectionName or IsActive column missing in Active SS Collections sheet.');
-             throw new Error("CollectionName/IsActive columns missing in Active SS Collections sheet.");
-        }
+    // This function now reads from both Active and Historical spreadsheets
+    // to provide a complete list for UI selectors.
+    Logger.log("Fetching ALL collections from BOTH Active and Historical SS for management/stats modal.");
+    
+    const allCollections = new Map(); // Use a Map to handle potential duplicates gracefully.
 
-        return data.slice(1).map(row => ({
-            name: row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : null,
-            promoCode: promoCol > -1 && row.length > promoCol && row[promoCol] ? row[promoCol].toString().trim() : "",
-            isActive: activeCol > -1 && row.length > activeCol ? row[activeCol] === true : false
-        })).filter(c => c.name).reverse();
-    } catch (e) {
-        logError('getCollectionsList', `Error reading Active SS Collections for management: ${e.message}`, e.stack);
-        return [];
+    // 1. Get collections from the ACTIVE spreadsheet
+    try {
+        if (collectionsSheet) {
+            const activeData = collectionsSheet.getDataRange().getValues();
+            if (activeData.length > 1) {
+                const headers = activeData[0].map(h => h.toString().trim());
+                const nameCol = headers.indexOf("CollectionName");
+                const promoCol = headers.indexOf("PromoCode");
+                const activeCol = headers.indexOf("IsActive");
+
+                if (nameCol !== -1 && activeCol !== -1) {
+                    activeData.slice(1).forEach(row => {
+                        const name = row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : null;
+                        if (name && !allCollections.has(name)) {
+                            allCollections.set(name, {
+                                name: name,
+                                promoCode: promoCol > -1 && row.length > promoCol && row[promoCol] ? row[promoCol].toString().trim() : "",
+                                isActive: activeCol > -1 && row.length > activeCol ? row[activeCol] === true : false
+                            });
+                        }
+                    });
+                }
+            }
+        }
+    } catch(e) {
+        logError('getCollectionsList (Active part)', `Error reading Active Collections sheet: ${e.message}`, e.stack);
     }
+
+    // 2. Get collections from the HISTORICAL spreadsheet
+    try {
+        const historicalSS = SpreadsheetApp.openById(HISTORICAL_DATA_SPREADSHEET_ID);
+        const historicalCollectionsSheet = historicalSS.getSheetByName("Collections");
+
+        if (historicalCollectionsSheet) {
+            const historicalData = historicalCollectionsSheet.getDataRange().getValues();
+            if (historicalData.length > 1) {
+                const headers = historicalData[0].map(h => h.toString().trim());
+                const nameCol = headers.indexOf("CollectionName");
+                const promoCol = headers.indexOf("PromoCode");
+
+                if (nameCol !== -1) {
+                    historicalData.slice(1).forEach(row => {
+                        const name = row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : null;
+                        if (name && !allCollections.has(name)) { // Avoid overwriting if it somehow exists in both
+                            allCollections.set(name, {
+                                name: name,
+                                promoCode: promoCol > -1 && row.length > promoCol && row[promoCol] ? row[promoCol].toString().trim() : "",
+                                isActive: false // All historical collections are considered inactive
+                            });
+                        }
+                    });
+                }
+            }
+        }
+    } catch(e) {
+        logError('getCollectionsList (Historical part)', `Error reading Historical Collections sheet: ${e.message}`, e.stack);
+    }
+
+    // 3. Convert map to array and sort
+    return Array.from(allCollections.values()).sort((a,b) => a.name.localeCompare(b.name)).reverse();
 }
 
 
@@ -2752,7 +2837,8 @@ function addNewCollection(collectionData) {
         logActivity("COLLECTION_ADD_DENIED", `Unauthorized attempt to add collection: ${collectionData.name}`);
         return { success: false, message: "Error: Not authorized." };
     }
-    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found." }; }
+    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found."
+    }; }
     if (!collectionData?.name) return { success: false, message: "Collection name required." };
     const name = collectionData.name.toString().trim();
     const promoCode = collectionData.promoCode?.toString().trim() ?? "";
@@ -2794,7 +2880,8 @@ function updateCollection(collectionData) {
         logActivity("COLLECTION_UPDATE_DENIED", `Unauthorized attempt to update collection: ${collectionData.originalName}`);
         return { success: false, message: "Error: Not authorized." };
     }
-    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found." }; }
+    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found."
+    }; }
     if (!collectionData?.originalName || !collectionData?.name) return { success: false, message: "Original/new name required." };
     const originalName = collectionData.originalName.toString().trim();
     const newName = collectionData.name.toString().trim();
@@ -2822,11 +2909,12 @@ function updateCollection(collectionData) {
         if (originalName.toLowerCase() !== newName.toLowerCase()) {
              const conflict = data.slice(1).find((r, idx) => idx !== (foundRowIndex-1) &&
                                               r.length > nameCol &&
+                 
                                               r[nameCol]?.toString().toLowerCase() === newName.toLowerCase());
-             if (conflict) {
+                                              if (conflict) {
                 logActivity("COLLECTION_UPDATE_FAIL", `New collection name conflicts: ${newName}`, {originalName, newName, promoCode, isActive});
                 return { success: false, message: `New name "${newName}" already exists.` };
-             }
+                                              }
         }
 
         const sheetRowToUpdate = foundRowIndex + 1;
@@ -2912,12 +3000,14 @@ function archiveCollection(collectionNameToArchive) {
         return { success: false, message: `Collection "${collectionNameToArchive}" not found in the Active system.` };
     }
     if (collectionInfoToCopy[activeCollectionsHeaders.indexOf("IsActive")] === true) {
-       return { success: false, message: `Collection "${collectionNameToArchive}" is still marked as Active. Please deactivate it first.` };
+       return { success: false, message: `Collection "${collectionNameToArchive}" is still marked as Active.
+Please deactivate it first.` };
     }
 
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(30000)) {
-        return { success: false, message: "Could not archive now (system busy). Please try again." };
+        return { success: false, message: "Could not archive now (system busy). Please try again."
+        };
     }
 
     try {
@@ -2975,7 +3065,6 @@ function archiveCollection(collectionNameToArchive) {
         logActivity("COLLECTION_ARCHIVE_SUCCESS", `Archived collection: ${collectionNameToArchive}`, {ordersCopied: ordersToMove.length, inventoryCopied: inventoryToMove.length});
         scriptCache.remove('activeCollections_activeSS');
         return { success: true, message: `Collection "${collectionNameToArchive}" has been successfully archived.` };
-
     } finally {
         lock.releaseLock();
     }
@@ -3003,7 +3092,8 @@ function generateCsvData(collectionName, filters = {}) {
                let value = obj[header] ?? "";
                let cell = value.toString();
                if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) { 
-                   cell = '"' + cell.replace(/"/g, '""') + '"';
+                   cell = 
+                   '"' + cell.replace(/"/g, '""') + '"';
                }
                return cell;
            }).join(',') + "\r\n";
@@ -3044,12 +3134,14 @@ function generateImportCsvData(collectionName, filters = {}) {
                  outfitOrdered
             ];
    
+ 
             csvString += row.map(value => {
                 let cell = value.toString();
                 if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
                     cell = `"${cell.replace(/"/g, '""')}"`;
                 }
-   
+  
+  
                  return cell;
             }).join(',') + '\r\n';
         });
@@ -3111,7 +3203,8 @@ function uploadRawDataToSheet(fileContent, fileName) {
              for (let i=0; i < expectedRawHeadersCount; i++) {
                  if (i < row.length) {
                      newRow[i] = row[i];
-                 }
+      
+                   }
              }
              return newRow;
          });
@@ -3189,7 +3282,7 @@ Your tone is professional, insightful, and concise. The data is for the campaign
       return baseIntro + "Based on team performance and top issues, provide 2-3 sentences suggesting areas for operational improvement. Be constructive and data-driven. Use <strong> tags to highlight specific issues or team names.";
     case 'NextSteps':
         return baseIntro + `Generate a list of key takeaways.
-Create two sections: 'Successes' and 'Opportunities & Action Items'.
+        Create two sections: 'Successes' and 'Opportunities & Action Items'.
         - Each section should have a heading wrapped in an <h4> tag (e.g., <h4>Successes</h4>).
         - Each section should contain 2-3 bullet points in an unordered list (<ul><li>...</li></ul>).
         - Use <strong> tags to emphasize key metrics or takeaways within the bullet points.
@@ -3209,7 +3302,8 @@ function uploadAndSetBgImage(imageData) {
         PropertiesService.getScriptProperties().setProperty('PRESENTATION_BG_ID', fileId);
         return { success: true, fileId: fileId };
     }
-    return { success: false, message: "Failed to save image to drive." };
+    return { success: false, message: "Failed to save image to drive."
+    };
 }
 
 // Function to retrieve the saved background image file ID
