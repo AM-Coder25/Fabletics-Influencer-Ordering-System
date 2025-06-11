@@ -52,7 +52,6 @@
         $('#filterOwnerSelectHist, #filterNameHist, #filterEmailHist, #filterStatusHist, #filterOrderIssueHist, #filterOmsCostHist, #filterStartDateHist, #filterEndDateHist, #stockFilterButtonGroupHist input, #filterMissingLastNameBtnHist, #applyFiltersBtnHist, #clearFiltersBtnHist').prop('disabled', false);
         $('#stockFilterButtonGroupHist label').removeClass('disabled');
         
-        // --- MODIFICATION: Load stats and orders ---
         loadHistoricalStats(currentHistoricalCollectionName);
         switchToHistoricalView('orders');
       } else {
@@ -99,9 +98,18 @@
        }
     });
     $('#downloadCsvBtnHist').on('click', downloadHistoricalCsv);
+
+    // ADDED: Listener for the new checkbox
+    $('#modalTwoOutfitsCheckbox').on('change', function() {
+        if ($(this).is(':checked')) {
+            $('#modalOutfitOrdered2Container').slideDown();
+        } else {
+            $('#modalOutfitOrdered2Container').slideUp();
+            $('#modalOutfitOrdered2').val('');
+        }
+    });
   });
 
-  // --- NEW: Function to load dashboard stats ---
   function loadHistoricalStats(collectionName) {
     if (!collectionName) {
         $('#historicalDashboardStatsArea').hide();
@@ -115,7 +123,6 @@
         .getHistoricalDashboardStats(collectionName);
   }
 
-  // --- NEW: Function to populate dashboard stats ---
   function populateHistoricalDashboard(stats) {
       const mainContent = $('#historicalDashboardContent');
       mainContent.empty();
@@ -150,20 +157,19 @@
     $('#historicalOrdersArea, #historicalInventoryArea').hide();
     $('#viewHistoricalOrdersBtn, #viewHistoricalInventoryBtn').removeClass('btn-info active').addClass('btn-secondary');
 
-    // Define all controls that are specific to the "Orders" view
     const orderSpecificControls = '#historicalFiltersContainer, #filterMissingLastNameBtnHist, #applyFiltersBtnHist, #clearFiltersBtnHist, #downloadCsvBtnHist, #filterResultsMessageHist';
 
     if (viewType === 'orders') {
       $('#historicalOrdersArea').show();
       $('#viewHistoricalOrdersBtn').addClass('btn-info active');
-      $(orderSpecificControls).show(); // Show all order-related controls
+      $(orderSpecificControls).show(); 
       if (currentHistoricalCollectionName) {
         loadHistoricalOrders(currentHistoricalCollectionName);
       }
     } else if (viewType === 'inventory') {
       $('#historicalInventoryArea').show();
       $('#viewHistoricalInventoryBtn').addClass('btn-info active');
-      $(orderSpecificControls).hide(); // Hide all order-related controls
+      $(orderSpecificControls).hide(); 
       if (currentHistoricalCollectionName) {
         if ($('#historicalInventoryContent').is(':empty') || $('#historicalInventoryContent').data('loaded-for') !== currentHistoricalCollectionName) {
             loadHistoricalInventory(currentHistoricalCollectionName);
@@ -189,8 +195,8 @@
         displayMessageHist("Critical Warning: Could not load initial data (unexpected data format).", "danger", 0);
     }
     populateHistoricalCollectionSelector();
-    populateFilterDropdowns(); // Populate new filter dropdowns
-    populateModalDropdownOptions(); // Populate modal dropdowns
+    populateFilterDropdowns(); 
+    populateModalDropdownOptions();
   }
 
   function onFailureHist_InitialData(error) {
@@ -338,8 +344,7 @@
       .getHistoricalInventoryByCollection(collectionName);
   }
   
-  // --- Functions for Modal and Editing (Copied & Adapted from Main JS) ---
-  
+  // --- UPDATED: `handleEditOrderClick` to store original values ---
   function handleEditOrderClick($button) {
       const orderId = $button.data('order-id');
       if (!orderId) return;
@@ -355,6 +360,7 @@
           .getHistoricalOrderDetails(orderId);
   }
 
+  // --- UPDATED: `onHistoricalOrderDetailsLoaded` to handle all new logic ---
   function onHistoricalOrderDetailsLoaded(orderData) {
     hideLoadingHist();
     if (!orderData) {
@@ -364,6 +370,10 @@
     }
 
     console.log("Historical Order Details Loaded for Modal:", orderData);
+    
+    // Store original values for comparison on save
+    $('#modalOMS_ID').data('original-value', String(orderData.OMS_ID || ''));
+    $('#modalDateOrdered').val(orderData.DateOrdered || ''); // Store original date string
 
     // --- Main form fields ---
     $('#modalOrderID').val(orderData.OrderID);
@@ -390,7 +400,7 @@
     $('#modalStateAbbreviated').val(orderData.StateAbbreviated || '');
     $('#modalZipFormatted').val(orderData.ZipFormatted || '');
 
-    // --- START: Copied Highlight Logic ---
+    // --- Highlight Logic ---
     const highlightsDiv = $('#modalOrderHighlights');
     highlightsDiv.empty().hide();
     let highlightParts = [];
@@ -399,12 +409,8 @@
     const generalNotesForHighlight = orderData.GeneralNotes ? orderData.GeneralNotes.toString().trim() : "";
     const unavailableNotesForHighlight = orderData.OutfitUnavailableNotes ? orderData.OutfitUnavailableNotes.toString().trim() : "";
 
-    if (inseamForHighlight) {
-        highlightParts.push(`<strong>INSEAM:</strong> ${escapeHtml(inseamForHighlight)}`);
-    }
-    if (outfitsRawForHighlight) {
-        highlightParts.push(`<strong># Outfits:</strong> ${escapeHtml(unescapeHtml(outfitsRawForHighlight))}`);
-    }
+    if (inseamForHighlight) highlightParts.push(`<strong>INSEAM:</strong> ${escapeHtml(inseamForHighlight)}`);
+    if (outfitsRawForHighlight) highlightParts.push(`<strong># Outfits:</strong> ${escapeHtml(unescapeHtml(outfitsRawForHighlight))}`);
     if (generalNotesForHighlight) {
         let generalNotesSnippet = generalNotesForHighlight.substring(0, 100) + (generalNotesForHighlight.length > 100 ? "..." : "");
         highlightParts.push(`<strong>General Notes:</strong> ${escapeHtml(unescapeHtml(generalNotesSnippet))}`);
@@ -418,19 +424,14 @@
         highlightsDiv.html(`<p class="modal-title-note-relocated">${highlightParts.join(' &nbsp; | &nbsp; ')}</p>`);
         highlightsDiv.show();
     }
-    // --- END: Copied Highlight Logic ---
 
     // --- Notes fields (with highlight classes) ---
-    const inseamInput = $('#modalINSEAM');
-    inseamInput.val(inseamForHighlight);
-    if (inseamForHighlight.trim() !== '') inseamInput.addClass('highlight-inseam');
-    else inseamInput.removeClass('highlight-inseam');
+    const inseamInput = $('#modalINSEAM').val(inseamForHighlight);
+    inseamInput.toggleClass('highlight-inseam', inseamForHighlight.trim() !== '');
     inseamInput.off('input.inseamHighlight').on('input.inseamHighlight', function() { $(this).toggleClass('highlight-inseam', $(this).val().trim() !== ''); });
 
-    const numOutfitsTextarea = $('#modalNumOutfits');
-    numOutfitsTextarea.val(unescapeHtml(outfitsRawForHighlight));
-    if (outfitsRawForHighlight.trim() !== '') numOutfitsTextarea.addClass('highlight-green-bold');
-    else numOutfitsTextarea.removeClass('highlight-green-bold');
+    const numOutfitsTextarea = $('#modalNumOutfits').val(unescapeHtml(outfitsRawForHighlight));
+    numOutfitsTextarea.toggleClass('highlight-green-bold', outfitsRawForHighlight.trim() !== '');
     numOutfitsTextarea.off('input.outfitsHighlight').on('input.outfitsHighlight', function() { $(this).toggleClass('highlight-green-bold', $(this).val().trim() !== ''); });
 
     $('#modalGeneralNotes').val(unescapeHtml(orderData.GeneralNotes || ''));
@@ -470,30 +471,52 @@
     // --- Order Placement fields ---
     $('#modalPromoCodeUsed').val(orderData.PromoCodeUsedDisplay || 'N/A');
     $('#modalDateOrderedDisplay').text(orderData.DateOrdered || '---');
-    $('#modalDateOrdered').val(orderData.DateOrdered ? new Date(orderData.DateOrdered).toISOString() : '');
     $('#modalOMS_ID').val(orderData.OMS_ID || '');
     $('#modalOMS_Cost').val(orderData.OMS_Cost || '');
     $('#modalFulfillmentStatus').val(orderData.FulfillmentStatus || 'Pending');
     $('#modalOrderIssue').val(orderData.OrderIssue || '');
+    $('#modalSwap').prop('checked', orderData.Swap === 'Swap');
 
-    // Populate "Outfit Ordered" dropdown
+    // --- Logic for populating one or two outfit dropdowns ---
+    const twoOutfitsCheckbox = $('#modalTwoOutfitsCheckbox');
+    const outfitOrdered1Select = $('#modalOutfitOrdered');
+    const outfitOrdered2Select = $('#modalOutfitOrdered2');
+    const outfitOrdered2Container = $('#modalOutfitOrdered2Container');
+    const outfitOrderedString = orderData.OutfitOrdered || "";
+
+    // Populate "Outfit Ordered" dropdowns
     google.script.run
         .withSuccessHandler(function(inventoryData) {
-            const outfitSelect = $('#modalOutfitOrdered');
-            outfitSelect.empty().append('<option value="">-- Select --</option><option value="N/A">N/A</option><option value="ALL">ALL</option>');
+            outfitOrdered1Select.empty().append('<option value="">-- Select --</option><option value="N/A">N/A</option><option value="ALL">ALL</option>');
+            outfitOrdered2Select.empty().append('<option value="">-- Select --</option><option value="N/A">N/A</option><option value="ALL">ALL</option>');
+            
             if (inventoryData) {
                 inventoryData.forEach(outfit => {
-                    outfitSelect.append($('<option>', { value: outfit.name, text: outfit.name }));
+                    outfitOrdered1Select.append($('<option>', { value: outfit.name, text: outfit.name }));
+                    outfitOrdered2Select.append($('<option>', { value: outfit.name, text: outfit.name }));
                 });
             }
-            // Set the value after populating
-            outfitSelect.val(orderData.OutfitOrdered || '');
+            
+            // Set the value(s) after populating
+            if (outfitOrderedString.includes(',')) {
+                const parts = outfitOrderedString.split(',');
+                outfitOrdered1Select.val(parts[0] ? parts[0].trim() : '');
+                outfitOrdered2Select.val(parts[1] ? parts[1].trim() : '');
+                twoOutfitsCheckbox.prop('checked', true);
+                outfitOrdered2Container.show();
+            } else {
+                outfitOrdered1Select.val(outfitOrderedString);
+                outfitOrdered2Select.val('');
+                twoOutfitsCheckbox.prop('checked', false);
+                outfitOrdered2Container.hide();
+            }
         })
         .getHistoricalInventoryByCollection(orderData.COLLECTION_NAME);
 
     $('#orderDetailsModal').modal('show');
-}
+  }
   
+  // --- UPDATED: `saveOrderDetails` to include all new logic ---
   function saveOrderDetails() {
       $('#modalSpinner').show(); 
       $('#saveOrderDetailsBtn').prop('disabled', true);
@@ -502,6 +525,30 @@
           formData[item.name] = item.value;
       });
        if (!formData.hasOwnProperty('Swap')) { formData.Swap = ""; }
+
+      // --- ADDED: Date update logic based on OMS ID change ---
+      const omsIdFromForm = String(formData.OMS_ID || "").trim();
+      const originalOmsId = String($('#modalOMS_ID').data('original-value') || "").trim();
+      const originalDateOrderedString = String($('#modalDateOrdered').val() || "").trim();
+      let newDateOrderedValue = originalDateOrderedString;
+
+      if (omsIdFromForm && omsIdFromForm !== originalOmsId) {
+            const now = new Date();
+            const pad = (num) => (num < 10 ? '0' : '') + num;
+            newDateOrderedValue = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      } else if (!omsIdFromForm && originalOmsId) {
+          newDateOrderedValue = "";
+      }
+      formData.DateOrdered = newDateOrderedValue;
+      
+      // --- ADDED: Logic to combine one or two outfits ---
+      let outfit1Value = formData['OutfitOrdered'] ? String(formData['OutfitOrdered']).trim() : "";
+      let outfit2Value = $('#modalTwoOutfitsCheckbox').is(':checked') ? (formData['OutfitOrdered2'] ? String(formData['OutfitOrdered2']).trim() : "") : "";
+      let finalOutfitOrdered = outfit1Value;
+      if (outfit2Value) {
+          finalOutfitOrdered = finalOutfitOrdered ? `${finalOutfitOrdered}, ${outfit2Value}` : outfit2Value;
+      }
+      formData['OutfitOrdered'] = finalOutfitOrdered;
 
       google.script.run
           .withSuccessHandler(onOrderSaveSuccess)
