@@ -155,7 +155,8 @@ function getDropdownOptions(optionType) {
                        .filter(r => r[typeCol - 1] === optionType && r[valueCol -1])
                        .map(r => ({
                             value: r[valueCol - 1],
-                            style: styleCol > 0 ? r[styleCol-1] : null,
+         
+                           style: styleCol > 0 ? r[styleCol-1] : null,
                             order: orderCol > 0 ? parseInt(r[orderCol - 1]) || 999 : 999
                        }));
         if (orderCol > 0) opts.sort((a, b) => a.order - b.order);
@@ -194,7 +195,7 @@ function getAllHistoricalCollections() {
                 const collectionName = String(row[nameColIdx] || "").trim();
                 if (collectionName) {
                     return { name: collectionName };
-                }
+                 }
             }
           
            return null;
@@ -213,7 +214,8 @@ function getHistoricalFilteredOrders(collectionName, filters = {}, pageNumber = 
     Logger.log('getHistoricalFilteredOrders: Historical Orders sheet not initialized.');
     return { orders: [], totalOrderCount: 0, error: "Historical Orders data is not accessible." };
   }
-  if (!collectionName) { return { orders: [], totalOrderCount: 0, error: "Collection name is required." }; }
+  if (!collectionName) { return { orders: [], totalOrderCount: 0, error: "Collection name is required." };
+  }
 
   pageNumber = parseInt(pageNumber) || 1;
   pageSize = parseInt(pageSize) || 100;
@@ -238,7 +240,7 @@ function getHistoricalFilteredOrders(collectionName, filters = {}, pageNumber = 
         // --- Standard Text & Dropdown Filters ---
         if (filters.owner && row[ORDERS_COL.OWNER - 1]?.toString().toLowerCase() !== filters.owner.toLowerCase()) return false;
         if (filters.nameSearch && !row[ORDERS_COL.CONTACT - 1]?.toString().toLowerCase().includes(filters.nameSearch.toLowerCase())) return false;
-        if (filters.emailSearch && !row[ORDERS_COL.EMAIL - 1]?.toString().toLowerCase().includes(filters.emailSearch.toLowerCase())) return false;
+         if (filters.emailSearch && !row[ORDERS_COL.EMAIL - 1]?.toString().toLowerCase().includes(filters.emailSearch.toLowerCase())) return false;
         if (filters.orderIssue && row[ORDERS_COL.ORDER_ISSUE - 1] !== filters.orderIssue) return false;
 
         // --- OMS Cost Filter ---
@@ -263,10 +265,12 @@ function getHistoricalFilteredOrders(collectionName, filters = {}, pageNumber = 
                 if (prefString) {
                     const stockStatus = FIOSMain.getOutfitStockStatus(collectionName, prefString, collectionInventoryForStockFilter);
                     if (stockFilterType === "inStock" && stockStatus.overallStatus === "Available") {
-                        orderMatchesStockCriteria = true; break;
+                        orderMatchesStockCriteria = true;
+                        break;
                     }
                     if (stockFilterType === "partialOOS" && stockStatus.overallStatus === "Partial OOS") {
-                        orderMatchesStockCriteria = true; break;
+                        orderMatchesStockCriteria = true;
+                        break;
                     }
                 }
             }
@@ -309,13 +313,14 @@ function getHistoricalFilteredOrders(collectionName, filters = {}, pageNumber = 
         return {
             orderId: String(row[ORDERS_COL.ORDER_ID - 1] || ''), 
             contact: String(row[ORDERS_COL.CONTACT - 1] || ''),
-            email: String(row[ORDERS_COL.EMAIL - 1] || ''), 
+            email: String(row[ORDERS_COL.EMAIL  - 1] || ''), 
             owner: String(row[ORDERS_COL.OWNER - 1] || ''),
             status: String(row[ORDERS_COL.FULFILLMENT_STATUS - 1] || 'N/A'), 
             dateOrdered: dateOrderedString || '---',
             outfitOrdered: String(row[ORDERS_COL.OUTFIT_ORDERED - 1] || '---'),
             omsId: String(row[ORDERS_COL.OMS_ID - 1] || '---')
         };
+    
     });
     return { orders: resultOrders, totalOrderCount: totalOrderCount, pageNumber: pageNumber, pageSize: pageSize };
   } catch (e) {
@@ -372,7 +377,7 @@ function getHistoricalOrderDetails(orderId) {
             FulfillmentStatus: orderData.fulfillment_status, OrderIssue: orderData.order_issue,
             PromoCodeUsedDisplay: orderData.promo_code,
             Swap: orderData.swap,
-      
+     
              preferenceStockStatus: [] // To be populated below
         };
         if (collectionName) {
@@ -393,7 +398,7 @@ function getHistoricalOrderDetails(orderId) {
                     finalData.preferenceStockStatus.push(stock);
                 }
             }
-        }
+         }
         return finalData;
 
     } catch (e) 
@@ -468,15 +473,19 @@ function updateHistoricalOrder(orderDataFromClient) {
 
     const actualSheetRowIndex = rowIndexInSheetData + 1;
     const updatesToApply = {};
-    // Logic to map client keys to sheet columns and build updatesToApply object
-    // This is a direct adaptation of the `updateOrder` function from the main app
+    
+    // UPDATED: Expanded map to include all fields from the modal 
     const clientKeyToHeaderMap = {
         'StreetAddress': 'STREET', 'City': 'CITY', 'StateAbbreviated': 'STATE_ABBR',
-        'Contact': 'CONTACT', 'Email': 'EMAIL', 'Owner': 'OWNER', 'INSEAM': 'INSEAM',
+        'ZipFormatted': 'ZIP_FORMATTED',
+        'OutfitUnavailableNotes': 'UNAVAILABLE_NOTES',
+        'GeneralNotes': 'GENERAL_NOTES',
+        'OutfitOrdered': 'OUTFIT_ORDERED',
+        'OutfitsRawOriginal': 'OUTFITS_RAW_ORIGINAL',
+        'Contact' : 'CONTACT', 'Email': 'EMAIL', 'Owner': 'OWNER', 'INSEAM': 'INSEAM',
         'FulfillmentStatus': 'FULFILLMENT_STATUS', 'OrderIssue': 'ORDER_ISSUE',
-        'OMS_ID': 'OMS_ID', 'OMS_Cost': 'OMS_COST', 'DateOrdered': 'DATE_ORDERED' 
-        // ... etc
- 
+        'OMS_ID': 'OMS_ID', 'OMS_Cost': 'OMS_COST', 'DateOrdered': 'DATE_ORDERED',
+        'Swap': 'SWAP'
     };
 
     for (const clientKey in orderDataFromClient) {
@@ -489,7 +498,23 @@ function updateHistoricalOrder(orderDataFromClient) {
         if (sheetHeaderNameForKey) {
             const colIndexZeroBased = headers.indexOf(sheetHeaderNameForKey);
             if (colIndexZeroBased !== -1) {
-                updatesToApply[colIndexZeroBased] = orderDataFromClient[clientKey];
+                let valueToSet = orderDataFromClient[clientKey];
+                
+                // ADDED: Logic to handle date string from client 
+                if (sheetHeaderNameForKey === headers[ORDERS_COL.DATE_ORDERED - 1] && valueToSet && typeof valueToSet === 'string') {
+                    try {
+                        let parsedDate = new Date(valueToSet.replace(/-/g, '/')); // More lenient parsing
+                        if (!isNaN(parsedDate.getTime())) {
+                            valueToSet = parsedDate;
+                        } else {
+                            valueToSet = (valueToSet === "") ? "" : null; // Clear if invalid and not empty
+                        }
+                    } catch (e) {
+                        valueToSet = (valueToSet === "") ? "" : null;
+                    }
+                }
+                
+                updatesToApply[colIndexZeroBased] = valueToSet;
             }
         }
     }
@@ -524,7 +549,8 @@ function updateHistoricalOrder(orderDataFromClient) {
 }
 
 function generateHistoricalCsvData(collectionName, filters = {}) {
-   if (!histOrdersSheet) { return "Error: Historical Orders sheet not found."; }
+   if (!histOrdersSheet) { return "Error: Historical Orders sheet not found.";
+   }
    try {
        const result = getHistoricalFilteredOrders(collectionName, filters, 1, 50000);
        // High limit for export
@@ -542,7 +568,6 @@ function generateHistoricalCsvData(collectionName, filters = {}) {
                let cell = value.toString();
                if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) { 
                    cell = '"' + 
- 
                    cell.replace(/"/g, '""') + '"';
                }
                return cell;
@@ -600,7 +625,8 @@ function getHistoricalInventoryByCollection(collectionName) {
        }
         const pName = String(r[idx.PROD_NAME]).trim(); let etaDate = idx.ETA > -1 ? r[idx.ETA] : '';
         if (etaDate instanceof Date) { etaDate = Utilities.formatDate(etaDate, historicalSS.getSpreadsheetTimeZone(), "yyyy-MM-dd");
-        }
+       
+         }
         outfits[oName].pieces.push({
     
            productName: pName,
@@ -641,7 +667,8 @@ function getHistoricalProductCategories() {
     if (!histProductsSheet) { return {};
     }
     const cacheKey = 'historicalProductCategories_v3'; const cached = scriptCache.get(cacheKey);
-    if (cached) { try { return JSON.parse(cached); } catch(e){ /* ignore */ } }
+    if (cached) { try { return JSON.parse(cached);
+    } catch(e){ /* ignore */ } }
     const cats = {};
     try {
         const data = histProductsSheet.getDataRange().getValues();
@@ -657,6 +684,7 @@ function getHistoricalProductCategories() {
             if (Object.keys(cats).length > 0) { scriptCache.put(cacheKey, JSON.stringify(cats), CACHE_EXPIRATION_SECONDS * 2);
             }
         }
-    } catch (e) { Logger.log(`HIST_VIEWER: Error reading Historical Products for cats: ${e.message}`); }
+    } catch (e) { Logger.log(`HIST_VIEWER: Error reading Historical Products for cats: ${e.message}`);
+    }
     return cats;
 }
