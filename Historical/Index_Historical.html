@@ -119,69 +119,71 @@
             </div>
           </div>
           <hr>
-           <div class="row mb-3 align-items-end">
-                 <div class="col-md-3">
-                     <label for="filterOwnerSelectHist">Filter by Owner:</label>
-                     <select id="filterOwnerSelectHist" class="form-control form-control-sm" disabled>
-                         <option value="">-- All Owners --</option>
-                     </select>
-                 </div>
-                 <div class="col-md-2">
-                     <label for="filterNameHist">Search by Name:</label>
-                     <input type="text" id="filterNameHist" class="form-control form-control-sm" placeholder="Enter name..." disabled>
-                 </div>
-                 <div class="col-md-2">
-                     <label for="filterEmailHist">Search by Email:</label>
-                     <input type="email" id="filterEmailHist" class="form-control form-control-sm" placeholder="Enter email..." disabled>
-                 </div>
-                 <div class="col-md-3"> 
-                    <label for="filterStatusHist">Filter by Status:</label>
-                    <select id="filterStatusHist" class="form-control form-control-sm" disabled>
-                        <option value="">-- All Statuses --</option>
-                    </select>
-                 </div>
-                 <div class="col-md-2"> 
-                    <label for="filterOrderIssueHist">Filter by Order Issue:</label>
-                    <select id="filterOrderIssueHist" class="form-control form-control-sm" disabled>
-                        <option value="">-- All Issues --</option>
-                    </select>
-                 </div>
+          <div id="historicalFiltersContainer">
+            <div class="row mb-3 align-items-end">
+                  <div class="col-md-3">
+                      <label for="filterOwnerSelectHist">Filter by Owner:</label>
+                      <select id="filterOwnerSelectHist" class="form-control form-control-sm" disabled>
+                          <option value="">-- All Owners --</option>
+                      </select>
+                  </div>
+                  <div class="col-md-2">
+                      <label for="filterNameHist">Search by Name:</label>
+                      <input type="text" id="filterNameHist" class="form-control form-control-sm" placeholder="Enter name..." disabled>
+                  </div>
+                  <div class="col-md-2">
+                      <label for="filterEmailHist">Search by Email:</label>
+                      <input type="email" id="filterEmailHist" class="form-control form-control-sm" placeholder="Enter email..." disabled>
+                  </div>
+                  <div class="col-md-3"> 
+                      <label for="filterStatusHist">Filter by Status:</label>
+                      <select id="filterStatusHist" class="form-control form-control-sm" disabled>
+                          <option value="">-- All Statuses --</option>
+                      </select>
+                  </div>
+                  <div class="col-md-2"> 
+                      <label for="filterOrderIssueHist">Filter by Order Issue:</label>
+                      <select id="filterOrderIssueHist" class="form-control form-control-sm" disabled>
+                          <option value="">-- All Issues --</option>
+                      </select>
+                  </div>
             </div>
-             <div class="row mb-3 align-items-end">
-                 <div class="col-md-3">
-                    <label for="filterOmsCostHist">Has OMS Cost:</label>
-                    <select id="filterOmsCostHist" class="form-control form-control-sm" disabled>
-                        <option value="">-- All --</option>
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                    </select>
-                 </div>
-                 <div class="col-md-auto">
-                    <label for="filterStartDateHist">Start Date Ordered:</label>
-                    <input type="date" id="filterStartDateHist" class="form-control form-control-sm" disabled>
-                </div>
-                <div class="col-md-auto">
-                    <label for="filterEndDateHist">End Date Ordered:</label>
-                    <input type="date" id="filterEndDateHist" class="form-control form-control-sm" disabled>
-                </div>
-             </div>
-             <div class="row mb-3">
-                <div class="col-md-12">
-                    <label>Filter by Stock Availability (Pending Orders):</label>
-                    <div class="btn-group btn-group-toggle d-block" data-toggle="buttons" id="stockFilterButtonGroupHist">
-                        <label class="btn btn-sm btn-outline-secondary active">
-                            <input type="radio" name="stockFilterHist" value="all" checked autocomplete="off"> Show All
-                        </label>
-                        <label class="btn btn-sm btn-outline-success">
-                            <input type="radio" name="stockFilterHist" value="inStock" autocomplete="off"> In-Stock
-                        </label>
-                        <label class="btn btn-sm btn-outline-warning">
-                            <input type="radio" name="stockFilterHist" value="partialOOS" autocomplete="off"> Partial
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class="row justify-content-between align-items-center">
+              <div class="row mb-3 align-items-end">
+                  <div class="col-md-3">
+                      <label for="filterOmsCostHist">Has OMS Cost:</label>
+                      <select id="filterOmsCostHist" class="form-control form-control-sm" disabled>
+                          <option value="">-- All --</option>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                      </select>
+                  </div>
+                  <div class="col-md-auto">
+                      <label for="filterStartDateHist">Start Date Ordered:</label>
+                      <input type="date" id="filterStartDateHist" class="form-control form-control-sm" disabled>
+                  </div>
+                  <div class="col-md-auto">
+                      <label for="filterEndDateHist">End Date Ordered:</label>
+                      <input type="date" id="filterEndDateHist" class="form-control form-control-sm" disabled>
+                  </div>
+              </div>
+              <div class="row mb-3">
+                  <div class="col-md-12">
+                      <label>Filter by Stock Availability (Pending Orders):</label>
+                      <div class="btn-group btn-group-toggle d-block" data-toggle="buttons" id="stockFilterButtonGroupHist">
+                          <label class="btn btn-sm btn-outline-secondary active">
+                              <input type="radio" name="stockFilterHist" value="all" checked autocomplete="off"> Show All
+                          </label>
+                          <label class="btn btn-sm btn-outline-success">
+                              <input type="radio" name="stockFilterHist" value="inStock" autocomplete="off"> In-Stock
+                          </label>
+                          <label class="btn btn-sm btn-outline-warning">
+                              <input type="radio" name="stockFilterHist" value="partialOOS" autocomplete="off"> Partial
+                          </label>
+                      </div>
+                  </div>
+              </div>
+          </div>
+          <div class="row justify-content-between align-items-center">
                 <div class="col-md-auto">
                     <button id="filterMissingLastNameBtnHist" class="btn btn-sm btn-orange" disabled><i class="fas fa-user-check"></i> Filter by Missing Last Name</button>
                     <button id="applyFiltersBtnHist" class="btn btn-sm btn-primary ml-2" title="Apply Filters" disabled><i class="fas fa-filter"></i> Filter</button>
