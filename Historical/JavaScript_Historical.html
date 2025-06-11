@@ -150,13 +150,20 @@
     $('#historicalOrdersArea, #historicalInventoryArea').hide();
     $('#viewHistoricalOrdersBtn, #viewHistoricalInventoryBtn').removeClass('btn-info active').addClass('btn-secondary');
 
+    // Define all controls that are specific to the "Orders" view
+    const orderSpecificControls = '#historicalFiltersContainer, #filterMissingLastNameBtnHist, #applyFiltersBtnHist, #clearFiltersBtnHist, #downloadCsvBtnHist, #filterResultsMessageHist';
+
     if (viewType === 'orders') {
       $('#historicalOrdersArea').show();
       $('#viewHistoricalOrdersBtn').addClass('btn-info active');
-      if (currentHistoricalCollectionName) loadHistoricalOrders(currentHistoricalCollectionName);
+      $(orderSpecificControls).show(); // Show all order-related controls
+      if (currentHistoricalCollectionName) {
+        loadHistoricalOrders(currentHistoricalCollectionName);
+      }
     } else if (viewType === 'inventory') {
       $('#historicalInventoryArea').show();
       $('#viewHistoricalInventoryBtn').addClass('btn-info active');
+      $(orderSpecificControls).hide(); // Hide all order-related controls
       if (currentHistoricalCollectionName) {
         if ($('#historicalInventoryContent').is(':empty') || $('#historicalInventoryContent').data('loaded-for') !== currentHistoricalCollectionName) {
             loadHistoricalInventory(currentHistoricalCollectionName);
@@ -349,93 +356,134 @@
   }
 
   function onHistoricalOrderDetailsLoaded(orderData) {
-      hideLoadingHist();
-      if (!orderData) { 
-        displayMessageHist('Error: Could not load order details.', 'danger'); 
-        if(currentlyEditingRow) currentlyEditingRow.removeClass('table-row-editing');
-        return; 
-      }
-      
-      console.log("Historical Order Details Loaded for Modal:", orderData);
+    hideLoadingHist();
+    if (!orderData) {
+        displayMessageHist('Error: Could not load order details.', 'danger');
+        if (currentlyEditingRow) currentlyEditingRow.removeClass('table-row-editing');
+        return;
+    }
 
-      // --- Main form fields ---
-      $('#modalOrderID').val(orderData.OrderID);
-      $('#modalCollectionName').val(orderData.COLLECTION_NAME); 
-      $('#modalContactName').text(escapeHtml(orderData.ContactNameForTitle || 'N/A'));
+    console.log("Historical Order Details Loaded for Modal:", orderData);
 
-      const contactFullName = orderData.Contact || '';
-      const firstSpaceIndex = contactFullName.indexOf(' ');
-      let firstName = ''; let lastName = '';
-      if (firstSpaceIndex === -1) { firstName = contactFullName; } else {
-          firstName = contactFullName.substring(0, firstSpaceIndex);
-          lastName = contactFullName.substring(firstSpaceIndex + 1);
-      }
-      $('#modalFirstName').val(firstName);
-      $('#modalLastName').val(lastName);
-      
-      $('#modalEmail').val(orderData.Email || '');
-      $('#modalOwner').val(orderData.Owner || '');
-      $('#modalStreetAddress').val(orderData.StreetAddress || '');
-      $('#modalCity').val(orderData.City || '');
-      $('#modalStateAbbreviated').val(orderData.StateAbbreviated || '');
-      $('#modalZipFormatted').val(orderData.ZipFormatted || '');
-      
-      // --- Notes fields ---
-      $('#modalINSEAM').val(orderData.INSEAM || '');
-      $('#modalNumOutfits').val(orderData.OutfitsRawOriginal || '');
-      $('#modalGeneralNotes').val(orderData.GeneralNotes || '');
-      $('#modalOutfitUnavailableNotes').val(orderData.OutfitUnavailableNotes || '');
+    // --- Main form fields ---
+    $('#modalOrderID').val(orderData.OrderID);
+    $('#modalCollectionName').val(orderData.COLLECTION_NAME);
+    $('#modalContactName').text(escapeHtml(orderData.ContactNameForTitle || 'N/A'));
 
-      // --- Preferences List ---
-      const prefsList = $('#modalPreferencesList'); prefsList.empty();
-      if (orderData.preferenceStockStatus && orderData.preferenceStockStatus.length > 0) {
-           orderData.preferenceStockStatus.forEach((prefInfo, index) => {
-                const fileId = prefInfo.imageUrl;
-                const imageContainerId = `pref-img-cont-hist-${index}-${Date.now()}`; 
-                let imageHtml = `<div id="${imageContainerId}" class="pref-image-placeholder">[No Image]</div>`;
+    const contactFullName = orderData.Contact || '';
+    const firstSpaceIndex = contactFullName.indexOf(' ');
+    let firstName = '';
+    let lastName = '';
+    if (firstSpaceIndex === -1) {
+        firstName = contactFullName;
+    } else {
+        firstName = contactFullName.substring(0, firstSpaceIndex);
+        lastName = contactFullName.substring(firstSpaceIndex + 1);
+    }
+    $('#modalFirstName').val(firstName);
+    $('#modalLastName').val(lastName);
 
-                if (fileId) {
-                     imageHtml = `<div id="${imageContainerId}" class="pref-image-placeholder">[Loading...]</div>`;
-                     google.script.run
-                         .withSuccessHandler((imgData) => { 
-                             if (imgData && imgData.base64) { 
-                                 $(`#${imageContainerId}`).empty().html(`<img src="data:${imgData.mimeType};base64,${imgData.base64}" class="pref-image">`); 
-                             } else { $(`#${imageContainerId}`).html('[No Image Data]'); } 
-                         })
-                         .withFailureHandler((err) => { $(`#${imageContainerId}`).html('[Image Fetch Error]'); })
-                         .getImageData_Historical(fileId);
-                }
+    $('#modalEmail').val(orderData.Email || '');
+    $('#modalOwner').val(orderData.Owner || '');
+    $('#modalStreetAddress').val(orderData.StreetAddress || '');
+    $('#modalCity').val(orderData.City || '');
+    $('#modalStateAbbreviated').val(orderData.StateAbbreviated || '');
+    $('#modalZipFormatted').val(orderData.ZipFormatted || '');
 
-                const stockClass = 'stock-' + (prefInfo.overallStatus || 'Unknown').replace(/\s+/g, '-').toLowerCase();
-                let piecesHtml = '<div class="pref-stock-details">';
-                if (prefInfo.pieceStatus && prefInfo.pieceStatus.length > 0) {
-                     prefInfo.pieceStatus.forEach(p => { piecesHtml += `<div><strong>${escapeHtml(p.productName)}:</strong> <small>${escapeHtml(p.requiredSize)} &rarr; ${escapeHtml(p.status)}${escapeHtml(p.note)}</small></div>`; });
-                } else piecesHtml += '<div class="text-muted">No piece details available.</div>';
-                piecesHtml += '</div>';
+    // --- START: Copied Highlight Logic ---
+    const highlightsDiv = $('#modalOrderHighlights');
+    highlightsDiv.empty().hide();
+    let highlightParts = [];
+    const inseamForHighlight = orderData.INSEAM ? orderData.INSEAM.toString().trim() : "";
+    const outfitsRawForHighlight = orderData.OutfitsRawOriginal ? orderData.OutfitsRawOriginal.toString().trim() : "";
+    const generalNotesForHighlight = orderData.GeneralNotes ? orderData.GeneralNotes.toString().trim() : "";
+    const unavailableNotesForHighlight = orderData.OutfitUnavailableNotes ? orderData.OutfitUnavailableNotes.toString().trim() : "";
 
-                const outfitTitle = prefInfo.preference.replace(/\s*\(.*?\)$/, ''); 
-                const itemHtml = `<div class="preference-item d-flex mb-3"><div class="mr-3" style="width: 80px; height: 100px;">${imageHtml}</div><div class="flex-grow-1"><h6><span class="pref-text">${index + 1}. ${escapeHtml(outfitTitle)}</span><span class="stock-status-badge ${stockClass}">${escapeHtml(prefInfo.overallStatus)}</span></h6>${piecesHtml}</div></div><hr class="my-2">`;
-                prefsList.append(itemHtml);
-           });
-      } else { prefsList.append('<p class="text-muted">No outfit preferences listed for this order.</p>'); }
+    if (inseamForHighlight) {
+        highlightParts.push(`<strong>INSEAM:</strong> ${escapeHtml(inseamForHighlight)}`);
+    }
+    if (outfitsRawForHighlight) {
+        highlightParts.push(`<strong># Outfits:</strong> ${escapeHtml(unescapeHtml(outfitsRawForHighlight))}`);
+    }
+    if (generalNotesForHighlight) {
+        let generalNotesSnippet = generalNotesForHighlight.substring(0, 100) + (generalNotesForHighlight.length > 100 ? "..." : "");
+        highlightParts.push(`<strong>General Notes:</strong> ${escapeHtml(unescapeHtml(generalNotesSnippet))}`);
+    }
+    if (unavailableNotesForHighlight) {
+        let unavailableNotesSnippet = unavailableNotesForHighlight.substring(0, 70) + (unavailableNotesForHighlight.length > 70 ? "..." : "");
+        highlightParts.push(`<strong>Unavailable:</strong> ${escapeHtml(unescapeHtml(unavailableNotesSnippet))}`);
+    }
 
-      // --- Order Placement fields ---
-      $('#modalPromoCodeUsed').val(orderData.PromoCodeUsedDisplay || 'N/A'); 
-      $('#modalDateOrderedDisplay').text(orderData.DateOrdered || '---'); 
-      $('#modalDateOrdered').val(orderData.DateOrdered ? new Date(orderData.DateOrdered).toISOString() : '');
-      $('#modalOMS_ID').val(orderData.OMS_ID || '');
-      $('#modalOMS_Cost').val(orderData.OMS_Cost || '');
-      $('#modalFulfillmentStatus').val(orderData.FulfillmentStatus || 'Pending');
-      $('#modalOrderIssue').val(orderData.OrderIssue || '');
-      
-      // Populate "Outfit Ordered" dropdown
-      google.script.run
+    if (highlightParts.length > 0) {
+        highlightsDiv.html(`<p class="modal-title-note-relocated">${highlightParts.join(' &nbsp; | &nbsp; ')}</p>`);
+        highlightsDiv.show();
+    }
+    // --- END: Copied Highlight Logic ---
+
+    // --- Notes fields (with highlight classes) ---
+    const inseamInput = $('#modalINSEAM');
+    inseamInput.val(inseamForHighlight);
+    if (inseamForHighlight.trim() !== '') inseamInput.addClass('highlight-inseam');
+    else inseamInput.removeClass('highlight-inseam');
+    inseamInput.off('input.inseamHighlight').on('input.inseamHighlight', function() { $(this).toggleClass('highlight-inseam', $(this).val().trim() !== ''); });
+
+    const numOutfitsTextarea = $('#modalNumOutfits');
+    numOutfitsTextarea.val(unescapeHtml(outfitsRawForHighlight));
+    if (outfitsRawForHighlight.trim() !== '') numOutfitsTextarea.addClass('highlight-green-bold');
+    else numOutfitsTextarea.removeClass('highlight-green-bold');
+    numOutfitsTextarea.off('input.outfitsHighlight').on('input.outfitsHighlight', function() { $(this).toggleClass('highlight-green-bold', $(this).val().trim() !== ''); });
+
+    $('#modalGeneralNotes').val(unescapeHtml(orderData.GeneralNotes || ''));
+    $('#modalOutfitUnavailableNotes').val(unescapeHtml(orderData.OutfitUnavailableNotes || ''));
+
+    // --- Preferences List ---
+    const prefsList = $('#modalPreferencesList');
+    prefsList.empty();
+    if (orderData.preferenceStockStatus && orderData.preferenceStockStatus.length > 0) {
+        orderData.preferenceStockStatus.forEach((prefInfo, index) => {
+            const fileId = prefInfo.imageUrl;
+            const imageContainerId = `pref-img-cont-hist-${index}-${Date.now()}`;
+            let imageHtml = `<div id="${imageContainerId}" class="pref-image-placeholder">[No Image]</div>`;
+            if (fileId) {
+                imageHtml = `<div id="${imageContainerId}" class="pref-image-placeholder">[Loading...]</div>`;
+                google.script.run
+                    .withSuccessHandler((imgData) => {
+                        if (imgData && imgData.base64) {
+                            $(`#${imageContainerId}`).empty().html(`<img src="data:${imgData.mimeType};base64,${imgData.base64}" class="pref-image">`);
+                        } else { $(`#${imageContainerId}`).html('[No Image Data]'); }
+                    })
+                    .withFailureHandler((err) => { $(`#${imageContainerId}`).html('[Image Fetch Error]'); })
+                    .getImageData_Historical(fileId);
+            }
+            const stockClass = 'stock-' + (prefInfo.overallStatus || 'Unknown').replace(/\s+/g, '-').toLowerCase();
+            let piecesHtml = '<div class="pref-stock-details">';
+            if (prefInfo.pieceStatus && prefInfo.pieceStatus.length > 0) {
+                prefInfo.pieceStatus.forEach(p => { piecesHtml += `<div><strong>${escapeHtml(p.productName)}:</strong> <small>${escapeHtml(p.requiredSize)} &rarr; ${escapeHtml(p.status)}${escapeHtml(p.note)}</small></div>`; });
+            } else piecesHtml += '<div class="text-muted">No piece details available.</div>';
+            piecesHtml += '</div>';
+            const outfitTitle = prefInfo.preference.replace(/\s*\(.*?\)$/, '');
+            const itemHtml = `<div class="preference-item d-flex mb-3"><div class="mr-3" style="width: 80px; height: 100px;">${imageHtml}</div><div class="flex-grow-1"><h6><span class="pref-text">${index + 1}. ${escapeHtml(outfitTitle)}</span><span class="stock-status-badge ${stockClass}">${escapeHtml(prefInfo.overallStatus)}</span></h6>${piecesHtml}</div></div><hr class="my-2">`;
+            prefsList.append(itemHtml);
+        });
+    } else { prefsList.append('<p class="text-muted">No outfit preferences listed for this order.</p>'); }
+
+    // --- Order Placement fields ---
+    $('#modalPromoCodeUsed').val(orderData.PromoCodeUsedDisplay || 'N/A');
+    $('#modalDateOrderedDisplay').text(orderData.DateOrdered || '---');
+    $('#modalDateOrdered').val(orderData.DateOrdered ? new Date(orderData.DateOrdered).toISOString() : '');
+    $('#modalOMS_ID').val(orderData.OMS_ID || '');
+    $('#modalOMS_Cost').val(orderData.OMS_Cost || '');
+    $('#modalFulfillmentStatus').val(orderData.FulfillmentStatus || 'Pending');
+    $('#modalOrderIssue').val(orderData.OrderIssue || '');
+
+    // Populate "Outfit Ordered" dropdown
+    google.script.run
         .withSuccessHandler(function(inventoryData) {
             const outfitSelect = $('#modalOutfitOrdered');
             outfitSelect.empty().append('<option value="">-- Select --</option><option value="N/A">N/A</option><option value="ALL">ALL</option>');
             if (inventoryData) {
                 inventoryData.forEach(outfit => {
-                    outfitSelect.append($('<option>', {value: outfit.name, text: outfit.name}));
+                    outfitSelect.append($('<option>', { value: outfit.name, text: outfit.name }));
                 });
             }
             // Set the value after populating
@@ -443,8 +491,8 @@
         })
         .getHistoricalInventoryByCollection(orderData.COLLECTION_NAME);
 
-      $('#orderDetailsModal').modal('show');
-  }
+    $('#orderDetailsModal').modal('show');
+}
   
   function saveOrderDetails() {
       $('#modalSpinner').show(); 
@@ -606,5 +654,6 @@
   function checkAndHideLoading() { if (!isLoadingHistoricalOrders && !isLoadingHistoricalInventory) { hideLoadingHist(); } }
   function displayMessageHist(message, type = 'info', duration = 5000) { const alertId = `alert-hist-${Date.now()}`; let alertClass = 'alert-info'; if (type === 'danger') alertClass = 'alert-danger'; else if (type === 'warning') alertClass = 'alert-warning'; else if (type === 'success') alertClass = 'alert-success'; let iconClass = 'fa-info-circle'; if (type === 'danger') iconClass = 'fa-exclamation-circle'; else if (type === 'warning') iconClass = 'fa-exclamation-triangle'; else if (type === 'success') iconClass = 'fa-check-circle'; const alertElement = $(`<div id="${alertId}" class="alert ${alertClass} alert-dismissible fade show" role="alert" style="margin-bottom: 5px;"><i class="fas ${iconClass} mr-2"></i> ${escapeHtml(message)}<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button></div>`); $('#messageAreaHist').append(alertElement); if (duration > 0) { setTimeout(() => { $(`#${alertId}`).alert('close'); }, duration); } }
   function escapeHtml(unsafe) { if (unsafe === null || typeof unsafe === 'undefined') return ''; let text = unsafe.toString(); const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }; return text.replace(/[&<>"']/g, function(m) { return map[m]; }); }
+  function unescapeHtml(safe) { if (safe === null || typeof safe === 'undefined') return ''; return safe.toString().replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#039;/g, "'"); }
   function onFailureHist(error) { isLoadingHistoricalOrders = false; isLoadingHistoricalInventory = false; checkAndHideLoading(); console.error('CLIENT JS: General onFailureHist. Error:', JSON.stringify(error)); let errorMessage = 'An unknown server error occurred.'; if (error && error.message) { errorMessage = error.message; } else if (typeof error === 'string') { errorMessage = error; } displayMessageHist(`Error: ${escapeHtml(errorMessage)}`, 'danger', 0); }
 </script>
