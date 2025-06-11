@@ -261,8 +261,7 @@ function getScriptUrl() {
 }
 
 function getImageData(fileId) {
-  if (!fileId) { Logger.log("getImageData: No File ID provided."); return null;
-  }
+  if (!fileId) { Logger.log("getImageData: No File ID provided."); return null; }
   try {
     if (!/^[a-zA-Z0-9_-]+$/.test(fileId)) throw new Error("Invalid File ID format provided.");
     const file = DriveApp.getFileById(fileId);
@@ -1025,13 +1024,12 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
         const unavailableNotesFilter = filters.unavailableNotes?.toString().trim();
         const omsCostFilter = filters.omsCost;
         const missingLastNameFilter = filters.missingLastName === true;
-        
         const allValidRows = data.slice(1).filter(row => {
             if (row.length <= Math.max(...Object.values(indices).filter(v => v !== undefined && v !== null))) return false;
             
             // MODIFICATION: The hardcoded exclusion of 'Remove' status orders is now gone from here.
             // The status filter below will handle showing ONLY 'Remove' when selected, or excluding it otherwise.
-       
+      
             if (row[indices.CollectionName] !== collectionName) return false;
 
             if (ownerFilterLower && row[indices.Owner]?.toString().toLowerCase() !== ownerFilterLower) return false;
@@ -1050,8 +1048,7 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
             }
 
             if (omsCostFilter) {
-                const omsCostValue = row[indices.OMS_Cost] ?
-                parseFloat(row[indices.OMS_Cost]) : 0;
+                const omsCostValue = row[indices.OMS_Cost] ? parseFloat(row[indices.OMS_Cost]) : 0;
                 if (omsCostFilter === 'yes' && (!omsCostValue || omsCostValue <= 0)) {
                     return false;
                 }
@@ -1133,8 +1130,7 @@ function getFilteredOrders(collectionName, filters = {}, pageNumber = 1, pageSiz
                 dateOrdered: indices.DateOrdered !== undefined && row[indices.DateOrdered] instanceof Date ? Utilities.formatDate(row[indices.DateOrdered], Session.getScriptTimeZone(), "MM/dd/yyyy") : "",
                 outfitOrdered: indices.OutfitOrdered !== undefined && row.length > indices.OutfitOrdered ? row[indices.OutfitOrdered] : "",
                 omsId: row[indices.OMS_ID],
-                isDuplicate: emailForDupCheck ?
-                (emailCounts[emailForDupCheck] > 1) : false
+                isDuplicate: emailForDupCheck ? (emailCounts[emailForDupCheck] > 1) : false
             };
             return orderResult;
         });
@@ -1260,7 +1256,7 @@ function getDuplicateOrderInfo(collectionName, email, currentOrderId) {
              }
          }
          return { isDuplicate: foundCount > 1, otherOrderIds: otherOrderIds };
-    } catch (e) {
+     } catch (e) {
          logError('getDuplicateOrderInfo', `Error checking duplicates (Active SS) for ${collectionName}/${email}: ${e.message}`, e.stack);
          return { isDuplicate: false, otherOrderIds: [] };
     }
@@ -1289,10 +1285,9 @@ function getDropdownOptions(optionType) {
                        .filter(r => r[typeCol - 1] === optionType && r[valueCol -1])
                        .map(r => ({
                             value: r[valueCol - 1],
-         
-                           style: styleCol > 0 && r.length >= styleCol ? r[styleCol-1] : null,
+                            style: styleCol > 0 && r.length >= styleCol ? r[styleCol-1] : null,
                             order: orderCol > 0 && r.length >= orderCol ? parseInt(r[orderCol - 1]) || 999 : 999
-                       }));
+                        }));
         if (orderCol > 0) opts.sort((a, b) => a.order - b.order);
         opts = opts.map(({ order, ...rest }) => rest);
         scriptCache.put(cacheKey, JSON.stringify(opts), CACHE_EXPIRATION_SECONDS);
@@ -1474,11 +1469,9 @@ function saveImageToDrive(imageData, collectionName = 'Default') {
     if (!imageData || !imageData.base64Data || !imageData.mimeType || !imageData.fileName) { Logger.log("saveImageToDrive: Missing data.");
         return "";
     }
-    if (!IMAGE_BACKUP_FOLDER_ID || IMAGE_BACKUP_FOLDER_ID === "YOUR_DRIVE_FOLDER_ID_HERE") { logError("saveImageToDrive", "IMAGE_BACKUP_FOLDER_ID not set."); return "";
-    }
+    if (!IMAGE_BACKUP_FOLDER_ID || IMAGE_BACKUP_FOLDER_ID === "YOUR_DRIVE_FOLDER_ID_HERE") { logError("saveImageToDrive", "IMAGE_BACKUP_FOLDER_ID not set."); return ""; }
     const base64String = imageData.base64Data.split(',')[1];
-    if (!base64String) { Logger.log("saveImageToDrive: Invalid base64 data format."); return "";
-    }
+    if (!base64String) { Logger.log("saveImageToDrive: Invalid base64 data format."); return ""; }
     try {
       const blob = Utilities.newBlob(Utilities.base64Decode(base64String), imageData.mimeType, imageData.fileName);
       let parentFolder = DriveApp.getFolderById(IMAGE_BACKUP_FOLDER_ID);
@@ -1486,8 +1479,7 @@ function saveImageToDrive(imageData, collectionName = 'Default') {
       let collectionFolder = folders.hasNext() ? folders.next() : parentFolder.createFolder(collectionName);
       if(!collectionFolder) throw new Error("Could not get or create collection folder in Drive.");
       const existingFiles = collectionFolder.getFilesByName(imageData.fileName);
-      while (existingFiles.hasNext()) { existingFiles.next().setTrashed(true);
-      }
+      while (existingFiles.hasNext()) { existingFiles.next().setTrashed(true); }
       const savedFile = collectionFolder.createFile(blob);
       savedFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       const fileId = savedFile.getId();
@@ -1535,14 +1527,13 @@ function addNewOutfit(outfitData) {
              row[headerMap[INV_HEADERS.COLLECTION]-1] = outfitData.collectionName;
              row[headerMap[INV_HEADERS.OUTFIT_NAME]-1] = outfitData.outfitName;
              row[headerMap[INV_HEADERS.IMAGE_URL]-1] = imageFileId;
-   
+    
              if (headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE]) {
                 row[headerMap[INV_HEADERS.OUTFIT_QUICK_NOTE]-1] = outfitData.quickNote || "";
              }
              row[headerMap[INV_HEADERS.PIECE_SEQ]-1] = piece.sequence || (index + 1) * 10;
              row[headerMap[INV_HEADERS.PROD_NAME]-1] = piece.productName||"";
              row[headerMap[INV_HEADERS.PROD_SKU]-1] = piece.sku||"";
-    
              row[headerMap[INV_HEADERS.COLOR]-1] = piece.color||"";
         
              const catUpper = (piece.category || '').toUpperCase();
@@ -1649,7 +1640,7 @@ function getInventoryByCollection(collectionName) {
                 };
             }
   
-            
+    
             const pName = r[idx.PROD_NAME];
             let etaDate = idx.ETA > -1 && r.length > idx.ETA ? r[idx.ETA] : '';
             if (etaDate instanceof Date) {
@@ -1681,12 +1672,11 @@ function getInventoryByCollection(collectionName) {
                  color: idx.COLOR > -1 && r.length > idx.COLOR ? r[idx.COLOR] || '' : '',
                 availableSizes: idx.AVAIL_SIZES > -1 && r.length > idx.AVAIL_SIZES && r[idx.AVAIL_SIZES] ? r[idx.AVAIL_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
                 eta: etaDate,
-                swapSku: idx.SWAP_SKU > -1 && r.length > idx.SWAP_SKU ? r[idx.SWAP_SKU] || '' : '',
+            
+                 swapSku: idx.SWAP_SKU > -1 && r.length > idx.SWAP_SKU ? r[idx.SWAP_SKU] || '' : '',
        
-                         swapAvailableSizes: idx.SWAP_SIZES > -1 && r.length > idx.SWAP_SIZES ?
-                r[idx.SWAP_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
-                notes: idx.NOTES > -1 && r.length > idx.NOTES ?
-                r[idx.NOTES] || '' : ''
+                         swapAvailableSizes: idx.SWAP_SIZES > -1 && r.length > idx.SWAP_SIZES ? r[idx.SWAP_SIZES].toString().split(',').map(s=>s.trim()).filter(s=>s) : [],
+                notes: idx.NOTES > -1 && r.length > idx.NOTES ? r[idx.NOTES] || '' : ''
             });
         });
         for (const oN in outfits) {
@@ -1824,7 +1814,7 @@ function getOutfitStockStatus(collectionName, prefString, prefetchedInventory = 
                              currentPieceStatus = "OK (Swap)";
                              noteForPiece = ` (Swap SKU: ${p.swapSku})`;
                              overallStatusCode = Math.max(overallStatusCode, 1);
-                         } else {
+                        } else {
                              currentPieceStatus = "OOS";
                              noteForPiece = ` (OOS${etaString})`;
                              itemsOutOfStock++;
@@ -1970,8 +1960,7 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
     }
     piecesToUpdate = Array.isArray(piecesToUpdate) ? piecesToUpdate : [];
     if (piecesToUpdate.length === 0 && !imageData && newIsActiveStatus === null && newOutfitQuickNote === null) {
-        return { success: true, message: "No changes provided for inventory update."
-        };
+        return { success: true, message: "No changes provided for inventory update." };
     }
 
     Logger.log(`Updating inventory in Active SS: ${collectionName}-${outfitName}. Pieces: ${piecesToUpdate.length}, Img: ${!!imageData}, IsActive: ${newIsActiveStatus}, QuickNote: ${newOutfitQuickNote !== null}`);
@@ -2044,14 +2033,14 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
 
             const updatePieceCell = (invHeaderKey, newValue) => {
                  const headerName = INV_HEADERS[invHeaderKey];
-                 const colIdxZeroBased = 
-                 headerMap[headerName];
+                 const colIdxZeroBased = headerMap[headerName];
 
                  if (colIdxZeroBased !== undefined && currentPieceSheetData.length > colIdxZeroBased) {
                     const originalStr = currentPieceSheetData[colIdxZeroBased]?.toString() ?? "";
                     let newStr = newValue?.toString() ?? "";
-                    let valueToSet = newValue;
-                    if (invHeaderKey === 'ETA' && newValue) {
+       
+                     let valueToSet = newValue;
+                     if (invHeaderKey === 'ETA' && newValue) {
                         try {
                             const parts = newValue.split('-');
                             if (parts.length === 3) {
@@ -2072,16 +2061,14 @@ function updateInventoryItems(collectionName, outfitName, piecesToUpdate, imageD
                             } else {
                                 valueToSet = newValue;
                             }
-                        } catch(e){ valueToSet = newValue;
-                        }
+                        } catch(e){ valueToSet = newValue; }
                      }
                      
                     if (originalStr !== newStr) {
                          inventorySheet.getRange(sheetRowForPiece, colIdxZeroBased + 1).setValue(valueToSet);
                          updatesMadeCounter++;
                     }
-                } else { Logger.log(`Warning: Header for ${invHeaderKey} ('${headerName}') not found or row too short during piece update for SKU ${pieceData.sku}.`);
-                }
+                } else { Logger.log(`Warning: Header for ${invHeaderKey} ('${headerName}') not found or row too short during piece update for SKU ${pieceData.sku}.`); }
             };
             updatePieceCell('PROD_SKU', pieceData.sku?.toString().trim() ?? "");
             updatePieceCell('COLOR', pieceData.color?.toString().trim() ?? "");
@@ -2221,9 +2208,8 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
             newRow[headerMap[INV_HEADERS.PROD_SKU]] = pieceData.sku || "";
             newRow[headerMap[INV_HEADERS.COLOR]] = pieceData.color || "";
             let etaValue = pieceData.eta || "";
-            if (etaValue && typeof etaValue === 'string' && etaValue.match(/^\d{4}-\d{2}-\d{2}$/)) { // Basic<x_bin_880>-MM-DD check
-                try { etaValue = new Date(etaValue);
-                } catch(e) { /* keep as string if parse fails */ }
+            if (etaValue && typeof etaValue === 'string' && etaValue.match(/^\d{4}-\d{2}-\d{2}$/)) { // Basic yyyy-MM-DD check
+                try { etaValue = new Date(etaValue); } catch(e) { /* keep as string if parse fails */ }
             }
             newRow[headerMap[INV_HEADERS.ETA]] = etaValue;
             newRow[headerMap[INV_HEADERS.NOTES]] = pieceData.notes || "";
@@ -2254,9 +2240,9 @@ function syncOutfitAcrossActiveCollections(outfitDataFromClient) {
         Logger.log(`SYNC: No active collections found containing the outfit "${outfitDataFromClient.outfitName}" to sync updates to (beyond potentially the original collection if it was active).`);
         // If the original collection was active and processed, outfitsSyncedCount would be at least 1.
          // If outfitsSyncedCount is 0, it means the original collection was not active, or no other active collections had the outfit.
-        // The primary update for the original collection is handled by `updateInventoryItems`.
+         // The primary update for the original collection is handled by `updateInventoryItems`.
          // This sync function's main job is propagation.
-        // If no propagation targets, it's fine.
+         // If no propagation targets, it's fine.
     }
 
     logActivity("OUTFIT_SYNC_ACROSS_COLLECTIONS", `Synced outfit: ${outfitDataFromClient.outfitName}`, {
@@ -2342,208 +2328,167 @@ function deleteOutfit(collectionName, outfitName) {
 }
 
 function getDashboardStats(collectionNamesArray) {
-    if (!ordersSheet) {
-        logError('getDashboardStats', 'Orders sheet (Active SS) not found.');
-        return { error: "Orders sheet (Active SS) missing.", ownerStats: {}, issueCounts: {} };
-    }
-    if (!inventorySheet) { // Added check for inventory sheet
-        logError('getDashboardStats', 'Inventory sheet (Active SS) not found.');
-        return { error: "Inventory sheet (Active SS) missing." };
-    }
     if (!Array.isArray(collectionNamesArray) || collectionNamesArray.length === 0) {
         Logger.log("No collections selected for dashboard stats. Returning empty stats.");
         return { totalOrders: 0, statusCounts: {}, outfitCounts: {}, firstChoiceCounts: {}, ownerStats: {}, issueCounts: {}, placedOutfitCounts: {}, pref1OutfitCounts: {} };
     }
-    Logger.log(`Calculating dashboard stats from Active SS for collections: ${collectionNamesArray.join(', ')}`);
-    const stats = {
-        totalOrders: 0,
-        statusCounts: {},
-        outfitCounts: {},
-        firstChoiceCounts: {},
-        pref1OutfitCounts: {},
-        ownerStats: {},
-        issueCounts: {},
-        placedOutfitCounts: {}
-    };
-    try {
-        const data = ordersSheet.getDataRange().getValues();
-        const headers = data[0];
-        const colIndices = {};
-        const requiredKeys = ['COLLECTION_NAME', 'FULFILLMENT_STATUS', 'OUTFIT_ORDERED', 'PREF1', 'OWNER', 'ORDER_ISSUE'];
-        for (const key of requiredKeys) {
-              const colNum = ORDERS_COL[key];
-              if (!colNum || colNum > headers.length) {
-                logError('getDashboardStats', `ORDERS_COL constant for ${key} (val: ${colNum}) is invalid or out of bounds for headers length ${headers.length}. Header row: ${headers.join(',')}`);
-                continue;
-              }
-              const headerName = headers[colNum - 1];
-              if (!headerName) {
-                logError('getDashboardStats', `Header name could not be determined for ORDERS_COL key ${key} at 1-based index ${colNum}.`);
-                continue;
-              }
-              const actualIndex = headers.indexOf(headerName);
-              if (actualIndex === -1) {
-                logError('getDashboardStats', `Header '${headerName}' (for ${key}) not found in sheet headers: ${headers.join(',')}.`);
-                continue;
-              }
-              colIndices[key] = actualIndex;
-        }
-         if (colIndices.COLLECTION_NAME === undefined || colIndices.FULFILLMENT_STATUS === undefined) {
-             throw new Error("Critical column indices (COLLECTION_NAME or FULFILLMENT_STATUS) could not be determined. Dashboard stats cannot be calculated.");
-         }
 
-        data.slice(1).forEach(r => {
-            const maxIndex = Math.max(...Object.values(colIndices).filter(v => v !== undefined));
-            if (r.length <= maxIndex) {
-                 Logger.log(`Skipping short row in getDashboardStats: ${r.join(',')}. MaxIndex: ${maxIndex}, RowLength: ${r.length}`);
-                 return;
-            
+    Logger.log(`Calculating dashboard stats for collections: ${collectionNamesArray.join(', ')}`);
+    const stats = {
+        totalOrders: 0, statusCounts: {}, outfitCounts: {}, firstChoiceCounts: {},
+        pref1OutfitCounts: {}, ownerStats: {}, issueCounts: {}, placedOutfitCounts: {},
+        topRequested: [], topShipped: []
+    };
+    
+    try {
+        const activeCollectionNames = getActiveCollections().map(c => c.name);
+        const activeSelections = collectionNamesArray.filter(name => activeCollectionNames.includes(name));
+        const historicalSelections = collectionNamesArray.filter(name => !activeCollectionNames.includes(name));
+        
+        const outfitImageMap = new Map();
+        const outfitPiecesMap = new Map();
+
+        // Helper function to process rows from a given sheet
+        const processSheetData = (sheet, collectionsToProcess, isHistorical = false) => {
+            if (!sheet || collectionsToProcess.length === 0) return;
+            const data = sheet.getDataRange().getValues();
+            const headers = data[0];
+            const colIndices = {};
+            const requiredKeys = ['COLLECTION_NAME', 'FULFILLMENT_STATUS', 'OUTFIT_ORDERED', 'PREF1', 'OWNER', 'ORDER_ISSUE'];
+            for (const key of requiredKeys) {
+                const colNum = ORDERS_COL[key];
+                if (colNum && colNum <= headers.length) { colIndices[key] = colNum - 1; }
             }
 
-            if (r[colIndices.FULFILLMENT_STATUS] === 'Remove') {
+            if (colIndices.COLLECTION_NAME === undefined || colIndices.FULFILLMENT_STATUS === undefined) {
+                logError('getDashboardStats (processSheetData)', `Critical columns missing in ${isHistorical ? 'Historical' : 'Active'} sheet.`);
                 return;
             }
- 
-            if (collectionNamesArray.includes(r[colIndices.COLLECTION_NAME])) {
-                stats.totalOrders++;
-             
-            
-                const currentStatus = r[colIndices.FULFILLMENT_STATUS] || 'Unknown';
-    
-                const currentOwner = colIndices.OWNER !== undefined && r[colIndices.OWNER] ? r[colIndices.OWNER].toString().trim() : 'Unassigned';
-                const isPlacedInBond = currentStatus === 'Fulfilled' || currentStatus === 'Resolved';
-                const isPending = currentStatus === 'Pending';
-                if (!stats.ownerStats[currentOwner]) stats.ownerStats[currentOwner] = { total: 0, pending: 0, placed: 0 };
-                stats.ownerStats[currentOwner].total++;
-                if (isPlacedInBond) stats.ownerStats[currentOwner].placed++;
-                if (isPending) stats.ownerStats[currentOwner].pending++;
-                stats.statusCounts[currentStatus] = (stats.statusCounts[currentStatus] || 0) + 1;
-                if (colIndices.OUTFIT_ORDERED !== undefined) {
-                    const orderedOutfit = r[colIndices.OUTFIT_ORDERED];
-                    if (orderedOutfit && orderedOutfit !== 'N/A' && orderedOutfit.toString().trim() !== "") {
-                        stats.outfitCounts[orderedOutfit] = (stats.outfitCounts[orderedOutfit] || 0) + 1;
-                        if (isPlacedInBond) {
-                            stats.placedOutfitCounts[orderedOutfit] = (stats.placedOutfitCounts[orderedOutfit] || 0) + 1;
-                        }
 
-                        if (colIndices.PREF1 !== undefined) {
-                            const firstPreference = r[colIndices.PREF1];
-                            if (firstPreference && firstPreference.toString().trim() !== "") {
-                                const matchPref = firstPreference.match(/^(.*?)\s*\(.*\)$/);
-                                const firstChoiceName = matchPref ? matchPref[1].trim() : firstPreference.trim();
-                                if (orderedOutfit === firstChoiceName) {
-                                    stats.firstChoiceCounts[orderedOutfit] = (stats.firstChoiceCounts[orderedOutfit] || 0) + 1;
+            data.slice(1).forEach(r => {
+                const collectionName = r[colIndices.COLLECTION_NAME];
+                if (collectionsToProcess.includes(collectionName) && r[colIndices.FULFILLMENT_STATUS] !== 'Remove') {
+                    stats.totalOrders++;
+                    const currentStatus = r[colIndices.FULFILLMENT_STATUS] || 'Unknown';
+                    stats.statusCounts[currentStatus] = (stats.statusCounts[currentStatus] || 0) + 1;
+                    
+                    const currentOwner = colIndices.OWNER !== undefined && r[colIndices.OWNER] ? r[colIndices.OWNER].toString().trim() : 'Unassigned';
+                    const isPlacedInBond = currentStatus === 'Fulfilled' || currentStatus === 'Resolved';
+                    const isPending = currentStatus === 'Pending';
+                    if (!stats.ownerStats[currentOwner]) stats.ownerStats[currentOwner] = { total: 0, pending: 0, placed: 0 };
+                    stats.ownerStats[currentOwner].total++;
+                    if (isPlacedInBond) stats.ownerStats[currentOwner].placed++;
+                    if (isPending) stats.ownerStats[currentOwner].pending++;
+
+                    if (colIndices.OUTFIT_ORDERED !== undefined) {
+                        const orderedOutfit = r[colIndices.OUTFIT_ORDERED];
+                        if (orderedOutfit && orderedOutfit.toString().trim()) {
+                            stats.outfitCounts[orderedOutfit] = (stats.outfitCounts[orderedOutfit] || 0) + 1;
+                            if (isPlacedInBond) {
+                                stats.placedOutfitCounts[orderedOutfit] = (stats.placedOutfitCounts[orderedOutfit] || 0) + 1;
+                            }
+                            if (colIndices.PREF1 !== undefined) {
+                                const firstPreference = r[colIndices.PREF1];
+                                if (firstPreference && firstPreference.toString().trim()) {
+                                    const firstChoiceName = firstPreference.match(/^(.*?)\s*\(.*\)$/)?.[1].trim() ?? firstPreference.trim();
+                                    if (orderedOutfit === firstChoiceName) {
+                                        stats.firstChoiceCounts[orderedOutfit] = (stats.firstChoiceCounts[orderedOutfit] || 0) + 1;
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            
-                if (colIndices.ORDER_ISSUE !== undefined) {
-                    const orderIssue = r[colIndices.ORDER_ISSUE];
-                    if (orderIssue && orderIssue.toString().trim() !== "") {
-                        stats.issueCounts[orderIssue] = (stats.issueCounts[orderIssue] || 0) + 1;
+                    if (colIndices.ORDER_ISSUE !== undefined && r[colIndices.ORDER_ISSUE]) {
+                        const orderIssue = r[colIndices.ORDER_ISSUE].toString().trim();
+                        if(orderIssue) stats.issueCounts[orderIssue] = (stats.issueCounts[orderIssue] || 0) + 1;
                     }
-                }
-
-                if (colIndices.PREF1 !== undefined && r.length > colIndices.PREF1) {
-                      const firstPreferenceRaw = r[colIndices.PREF1];
-                      if (firstPreferenceRaw && firstPreferenceRaw.toString().trim() !== "") {
-                        const matchPrefRaw = firstPreferenceRaw.toString().match(/^(.*?)\s*\(.*\)$/);
-                        const firstChoiceOutfitName = matchPrefRaw && matchPrefRaw[1] ? matchPrefRaw[1].trim() : firstPreferenceRaw.toString().trim();
-                        if (firstChoiceOutfitName) {
-                            stats.pref1OutfitCounts[firstChoiceOutfitName] = (stats.pref1OutfitCounts[firstChoiceOutfitName] || 0) + 1;
+                    if (colIndices.PREF1 !== undefined && r[colIndices.PREF1]) {
+                        const firstPreferenceRaw = r[colIndices.PREF1].toString().trim();
+                        if (firstPreferenceRaw) {
+                            const firstChoiceOutfitName = firstPreferenceRaw.match(/^(.*?)\s*\(.*\)$/)?.[1].trim() ?? firstPreferenceRaw;
+                            if (firstChoiceOutfitName) {
+                                stats.pref1OutfitCounts[firstChoiceOutfitName] = (stats.pref1OutfitCounts[firstChoiceOutfitName] || 0) + 1;
+                            }
                         }
-                    }
-                }
-            }
-        });
-        // *** NEW LOGIC STARTS HERE ***
-        // Create maps for outfit images and pieces from the Inventory sheet.
-        const outfitImageMap = new Map();
-        const outfitPiecesMap = new Map();
-        // <-- ADDED
-        const invData = inventorySheet.getDataRange().getValues();
-        const invHeaders = invData[0];
-        const invCollIdx = invHeaders.indexOf(INV_HEADERS.COLLECTION);
-        const invOutfitNameIdx = invHeaders.indexOf(INV_HEADERS.OUTFIT_NAME);
-        const invImageUrlIdx = invHeaders.indexOf(INV_HEADERS.IMAGE_URL);
-        const invProdNameIdx = invHeaders.indexOf(INV_HEADERS.PROD_NAME);
-        // <-- ADDED
-        const invSkuIdx = invHeaders.indexOf(INV_HEADERS.PROD_SKU);
-        // <-- ADDED
-        const invSeqIdx = invHeaders.indexOf(INV_HEADERS.PIECE_SEQ);
-        // <-- ADDED
-
-        if (invOutfitNameIdx > -1 && invCollIdx > -1) {
-            invData.slice(1).forEach(row => {
-                const collName = row[invCollIdx];
-                const outfitName = row[invOutfitNameIdx];
-                
-              
-                if (outfitName && collectionNamesArray.includes(collName)) {
-                    // Map Image URL
-                    const imageUrl = invImageUrlIdx > -1 ? row[invImageUrlIdx] : '';
-                    if (imageUrl && !outfitImageMap.has(outfitName)) {
-                  
-                        outfitImageMap.set(outfitName, imageUrl);
-                    }
-                    
-                    // Map Pieces <-- ADDED
-                    const productName = invProdNameIdx > -1 ? row[invProdNameIdx] : '';
-                    const sku = invSkuIdx > -1 ? row[invSkuIdx] : '';
-                    const sequence = invSeqIdx > -1 ? (parseInt(row[invSeqIdx], 10) || 99) : 99;
-                    if(productName && sku) {
-                
-                        if (!outfitPiecesMap.has(outfitName)) {
-                            outfitPiecesMap.set(outfitName, []);
-                        }
-                        outfitPiecesMap.get(outfitName).push({ productName, sku, sequence });
                     }
                 }
             });
-        }
+        };
         
-        // Transform the top requested and placed outfits to include the image URL and pieces
-        stats.topRequested = Object.entries(stats.pref1OutfitCounts || {})
-            .sort(([, countA], [, countB]) => countB - countA)
-            .slice(0, 10)
-            .map(([name, count]) => ({ 
-          
-                name, 
-                count, 
-                imageUrl: outfitImageMap.get(name) || '',
-                pieces: outfitPiecesMap.get(name) || [] // <-- ADDED
-            }));
-        stats.topShipped = Object.entries(stats.placedOutfitCounts || {})
-            .sort(([, countA], [, countB]) => countB - countA)
-            .slice(0, 10)
-            .map(([name, count]) => ({ 
-              name, 
-              count, 
-              imageUrl: outfitImageMap.get(name) || '',
- 
-              pieces: outfitPiecesMap.get(name) || [] // <-- ADDED
-            }));
-        // *** NEW LOGIC ENDS HERE ***
+        // Helper function to process inventory from a given sheet
+        const processInventorySheet = (invSheet, collectionsToProcess) => {
+            if (!invSheet || collectionsToProcess.length === 0) return;
+            const invData = invSheet.getDataRange().getValues();
+            const invHeaders = invData[0];
+            const invCollIdx = invHeaders.indexOf(INV_HEADERS.COLLECTION);
+            const invOutfitNameIdx = invHeaders.indexOf(INV_HEADERS.OUTFIT_NAME);
+            const invImageUrlIdx = invHeaders.indexOf(INV_HEADERS.IMAGE_URL);
+            const invProdNameIdx = invHeaders.indexOf(INV_HEADERS.PROD_NAME);
+            const invSkuIdx = invHeaders.indexOf(INV_HEADERS.PROD_SKU);
+            const invSeqIdx = invHeaders.indexOf(INV_HEADERS.PIECE_SEQ);
 
+            if (invOutfitNameIdx > -1 && invCollIdx > -1) {
+                invData.slice(1).forEach(row => {
+                    const collName = row[invCollIdx];
+                    const outfitName = row[invOutfitNameIdx];
+                    if (outfitName && collectionsToProcess.includes(collName)) {
+                        if (invImageUrlIdx > -1 && row[invImageUrlIdx] && !outfitImageMap.has(outfitName)) {
+                            outfitImageMap.set(outfitName, row[invImageUrlIdx]);
+                        }
+                        const productName = invProdNameIdx > -1 ? row[invProdNameIdx] : '';
+                        const sku = invSkuIdx > -1 ? row[invSkuIdx] : '';
+                        const sequence = invSeqIdx > -1 ? (parseInt(row[invSeqIdx], 10) || 99) : 99;
+                        if (productName && sku) {
+                            if (!outfitPiecesMap.has(outfitName)) outfitPiecesMap.set(outfitName, []);
+                            outfitPiecesMap.get(outfitName).push({ productName, sku, sequence });
+                        }
+                    }
+                });
+            }
+        };
 
+        // Process Active Data
+        if (activeSelections.length > 0) {
+            processSheetData(ordersSheet, activeSelections, false);
+            processInventorySheet(inventorySheet, activeSelections);
+        }
+
+        // Process Historical Data
+        if (historicalSelections.length > 0) {
+            const historicalSS = SpreadsheetApp.openById(HISTORICAL_DATA_SPREADSHEET_ID);
+            const histOrdersSheet = historicalSS.getSheetByName(ORDERS_SHEET_NAME);
+            const histInventorySheet = historicalSS.getSheetByName(INVENTORY_SHEET_NAME);
+            processSheetData(histOrdersSheet, historicalSelections, true);
+            processInventorySheet(histInventorySheet, historicalSelections);
+        }
+
+        // Final calculations and mapping
         for (const ownerName in stats.ownerStats) {
             const ownerData = stats.ownerStats[ownerName];
             ownerData.completionPercent = ownerData.total > 0 ? Math.round((ownerData.placed / ownerData.total) * 100) : 0;
         }
-        Logger.log(`Dashboard Stats (Active SS for ${collectionNamesArray.join(', ')}): ${JSON.stringify(stats)}`);
+
+        stats.topRequested = Object.entries(stats.pref1OutfitCounts || {})
+            .sort(([, countA], [, countB]) => countB - countA)
+            .slice(0, 10)
+            .map(([name, count]) => ({ name, count, imageUrl: outfitImageMap.get(name) || '', pieces: outfitPiecesMap.get(name) || [] }));
+
+        stats.topShipped = Object.entries(stats.placedOutfitCounts || {})
+            .sort(([, countA], [, countB]) => countB - countA)
+            .slice(0, 10)
+            .map(([name, count]) => ({ name, count, imageUrl: outfitImageMap.get(name) || '', pieces: outfitPiecesMap.get(name) || [] }));
+
+        Logger.log(`Dashboard Stats (Active+Historical for ${collectionNamesArray.join(', ')}): ${JSON.stringify(stats)}`);
         return stats;
     } catch (e) {
-        logError('getDashboardStats', `Error calculating dashboard stats for collections [${collectionNamesArray.join(', ')}] (Active SS): ${e.message}`, e.stack);
+        logError('getDashboardStats', `Error calculating dashboard stats for collections [${collectionNamesArray.join(', ')}]: ${e.message}`, e.stack);
         return { error: e.message, ownerStats: {}, issueCounts: {}, placedOutfitCounts: {}, pref1OutfitCounts: {} };
     }
 }
 
 
 function getProductsList() {
-    if (!productsSheet) { logError('getProductsList', 'Products sheet (Active SS) not found.'); return [];
-    }
+    if (!productsSheet) { logError('getProductsList', 'Products sheet (Active SS) not found.'); return []; }
     try {
         const data = productsSheet.getDataRange().getValues();
         if (data.length <= 1) return [];
@@ -2555,8 +2500,7 @@ function getProductsList() {
             productName: row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : '',
             category: row.length > catCol && row[catCol] ? row[catCol].toString().trim() : ''
         })).filter(p => p.productName).reverse();
-    } catch (e) { logError('getProductsList', `Error reading Active SS Products: ${e.message}`, e.stack); return [];
-    }
+    } catch (e) { logError('getProductsList', `Error reading Active SS Products: ${e.message}`, e.stack); return []; }
 }
 
 // <<< NEW FUNCTION for batch adding products >>>
@@ -2580,8 +2524,7 @@ function batchAddProductsFromUpload(fileContentString) {
 
     const uploadedRows = Utilities.parseCsv(fileContentString);
     if (!uploadedRows || uploadedRows.length === 0) {
-      return { success: true, message: "Uploaded file was empty or could not be parsed."
-      };
+      return { success: true, message: "Uploaded file was empty or could not be parsed." };
     }
 
     const potentialHeader = uploadedRows[0][0] ? uploadedRows[0][0].toString().toLowerCase() : "";
@@ -2591,14 +2534,12 @@ function batchAddProductsFromUpload(fileContentString) {
             dataRows = uploadedRows.slice(1);
             Logger.log("Batch Add Products: Detected and skipped header row in uploaded file.");
         } else {
-            return { success: true, message: "Uploaded file contained only a header row or was empty."
-            };
+            return { success: true, message: "Uploaded file contained only a header row or was empty." };
         }
     }
     
     if (dataRows.length === 0) {
-      return { success: true, message: "No data rows found in uploaded file after header check."
-      };
+      return { success: true, message: "No data rows found in uploaded file after header check." };
     }
 
     const productsSheetHeaders = productsSheet.getRange(1, 1, 1, productsSheet.getLastColumn()).getValues()[0];
@@ -2656,13 +2597,11 @@ function addNewProduct(productData) {
       logActivity("PRODUCT_ADD_DENIED", `Unauthorized attempt to add product: ${productData.productName}`);
       return { success: false, message: "Error: Not authorized." };
   }
-  if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found."
-  }; }
+  if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found." }; }
   if (!productData?.productName || !productData?.category) return { success: false, message: "Missing product name or category." };
   const productName = productData.productName.toString().trim();
   const category = productData.category.toString().trim();
-  if (!productName || !category) return { success: false, message: "Product name/category cannot be empty."
-  };
+  if (!productName || !category) return { success: false, message: "Product name/category cannot be empty." };
 
   try {
        const data = productsSheet.getDataRange().getValues();
@@ -2697,11 +2636,9 @@ function updateProductCategory(productData) {
        logActivity("PRODUCT_UPDATE_DENIED", `Unauthorized attempt to update product: ${productData.originalProductName}`);
        return { success: false, message: "Error: Not authorized." };
    }
-   if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found."
-   }; }
+   if (!productsSheet) { return { success: false, message: "Products sheet (Active SS) not found." }; }
    if (!productData?.originalProductName || !productData?.productName || !productData?.category) {
-       return { success: false, message: "Missing data for product update."
-       };
+       return { success: false, message: "Missing data for product update." };
    }
    const originalName = productData.originalProductName.toString().trim();
    const newProductName = productData.productName.toString().trim();
@@ -2729,10 +2666,10 @@ function updateProductCategory(productData) {
                                               r.length > nameCol &&
                  
                                               r[nameCol]?.toString().toLowerCase() === newProductName.toLowerCase());
-                                              if (conflict) {
+             if (conflict) {
                 logActivity("PRODUCT_UPDATE_FAIL", `New product name conflicts: ${newProductName}`, {originalName, newProductName, newCategory});
                 return { success: false, message: `New product name "${newProductName}" already exists.` };
-                                              }
+             }
         }
 
         const sheetRowToUpdate = foundRowIndex + 1;
@@ -2767,7 +2704,8 @@ function getCollectionsList() {
     // to provide a complete list for UI selectors.
     Logger.log("Fetching ALL collections from BOTH Active and Historical SS for management/stats modal.");
     
-    const allCollections = new Map(); // Use a Map to handle potential duplicates gracefully.
+    const allCollections = new Map();
+    // Use a Map to handle potential duplicates gracefully.
 
     // 1. Get collections from the ACTIVE spreadsheet
     try {
@@ -2778,18 +2716,19 @@ function getCollectionsList() {
                 const nameCol = headers.indexOf("CollectionName");
                 const promoCol = headers.indexOf("PromoCode");
                 const activeCol = headers.indexOf("IsActive");
-
                 if (nameCol !== -1 && activeCol !== -1) {
                     activeData.slice(1).forEach(row => {
                         const name = row.length > nameCol && row[nameCol] ? row[nameCol].toString().trim() : null;
                         if (name && !allCollections.has(name)) {
-                            allCollections.set(name, {
+       
+                             allCollections.set(name, {
                                 name: name,
                                 promoCode: promoCol > -1 && row.length > promoCol && row[promoCol] ? row[promoCol].toString().trim() : "",
                                 isActive: activeCol > -1 && row.length > activeCol ? row[activeCol] === true : false
                             });
                         }
-                    });
+   
+                     });
                 }
             }
         }
@@ -2818,7 +2757,8 @@ function getCollectionsList() {
                                 promoCode: promoCol > -1 && row.length > promoCol && row[promoCol] ? row[promoCol].toString().trim() : "",
                                 isActive: false // All historical collections are considered inactive
                             });
-                        }
+                   
+                     }
                     });
                 }
             }
@@ -2837,8 +2777,7 @@ function addNewCollection(collectionData) {
         logActivity("COLLECTION_ADD_DENIED", `Unauthorized attempt to add collection: ${collectionData.name}`);
         return { success: false, message: "Error: Not authorized." };
     }
-    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found."
-    }; }
+    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found." }; }
     if (!collectionData?.name) return { success: false, message: "Collection name required." };
     const name = collectionData.name.toString().trim();
     const promoCode = collectionData.promoCode?.toString().trim() ?? "";
@@ -2880,8 +2819,7 @@ function updateCollection(collectionData) {
         logActivity("COLLECTION_UPDATE_DENIED", `Unauthorized attempt to update collection: ${collectionData.originalName}`);
         return { success: false, message: "Error: Not authorized." };
     }
-    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found."
-    }; }
+    if (!collectionsSheet) { return { success: false, message: "Collections sheet (Active SS) not found." }; }
     if (!collectionData?.originalName || !collectionData?.name) return { success: false, message: "Original/new name required." };
     const originalName = collectionData.originalName.toString().trim();
     const newName = collectionData.name.toString().trim();
@@ -2911,10 +2849,10 @@ function updateCollection(collectionData) {
                                               r.length > nameCol &&
                  
                                               r[nameCol]?.toString().toLowerCase() === newName.toLowerCase());
-                                              if (conflict) {
+             if (conflict) {
                 logActivity("COLLECTION_UPDATE_FAIL", `New collection name conflicts: ${newName}`, {originalName, newName, promoCode, isActive});
                 return { success: false, message: `New name "${newName}" already exists.` };
-                                              }
+             }
         }
 
         const sheetRowToUpdate = foundRowIndex + 1;
@@ -3001,13 +2939,12 @@ function archiveCollection(collectionNameToArchive) {
     }
     if (collectionInfoToCopy[activeCollectionsHeaders.indexOf("IsActive")] === true) {
        return { success: false, message: `Collection "${collectionNameToArchive}" is still marked as Active.
-Please deactivate it first.` };
+ Please deactivate it first.` };
     }
 
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(30000)) {
-        return { success: false, message: "Could not archive now (system busy). Please try again."
-        };
+        return { success: false, message: "Could not archive now (system busy). Please try again." };
     }
 
     try {
@@ -3076,8 +3013,7 @@ Please deactivate it first.` };
 
 
 function generateCsvData(collectionName, filters = {}) {
-   if (!ordersSheet) { return "Error: Orders sheet (Active SS) not found.";
-   }
+   if (!ordersSheet) { return "Error: Orders sheet (Active SS) not found."; }
    Logger.log(`Generating CSV from Active SS for: ${collectionName}, Filters: ${JSON.stringify(filters)}`);
    try {
        const result = getFilteredOrders(collectionName, filters, 1, 1000000);
@@ -3140,7 +3076,7 @@ function generateImportCsvData(collectionName, filters = {}) {
                 if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
                     cell = `"${cell.replace(/"/g, '""')}"`;
                 }
-  
+ 
   
                  return cell;
             }).join(',') + '\r\n';
@@ -3215,7 +3151,7 @@ function uploadRawDataToSheet(fileContent, fileName) {
             Logger.log(`Successfully wrote ${numRowsToWrite} data rows from ${fileName} to RawImport sheet (Active SS).`);
             logActivity("RAW_UPLOAD_SUCCESS", `Uploaded ${numRowsToWrite} rows from ${fileName}`, {fileName, rows: numRowsToWrite});
             return { success: true, message: `Successfully uploaded ${numRowsToWrite} data rows from "${fileName}" to RawImport sheet (Active SS).
-Ready to process.` };
+ Ready to process.` };
         } else {
             logActivity("RAW_UPLOAD_NO_WRITE", `No data rows to write from ${fileName} after processing`);
             return { success: true, message: `No data rows to write from "${fileName}" after processing.` };
@@ -3272,7 +3208,7 @@ function getAiInsight(stats, collectionNames, insightType) {
 // Helper function to build specific prompts for Gemini
 function buildPromptFor(stats, collectionNames, type) {
   const baseIntro = `You are a Senior PR & Marketing Analyst at Fabletics, reporting to the Senior VP of PR.
-Your tone is professional, insightful, and concise. The data is for the campaign(s): "${collectionNames.join(', ')}".\n\nDATA:\n${JSON.stringify(stats, null, 2)}\n\nTASK:\n`;
+ Your tone is professional, insightful, and concise. The data is for the campaign(s): "${collectionNames.join(', ')}".\n\nDATA:\n${JSON.stringify(stats, null, 2)}\n\nTASK:\n`;
   switch (type) {
     case 'ExecutiveSummary':
       return baseIntro + "Provide a 1-2 sentence executive summary. Make the most important metric or finding bold using <strong> tags.";
@@ -3282,7 +3218,7 @@ Your tone is professional, insightful, and concise. The data is for the campaign
       return baseIntro + "Based on team performance and top issues, provide 2-3 sentences suggesting areas for operational improvement. Be constructive and data-driven. Use <strong> tags to highlight specific issues or team names.";
     case 'NextSteps':
         return baseIntro + `Generate a list of key takeaways.
-        Create two sections: 'Successes' and 'Opportunities & Action Items'.
+ Create two sections: 'Successes' and 'Opportunities & Action Items'.
         - Each section should have a heading wrapped in an <h4> tag (e.g., <h4>Successes</h4>).
         - Each section should contain 2-3 bullet points in an unordered list (<ul><li>...</li></ul>).
         - Use <strong> tags to emphasize key metrics or takeaways within the bullet points.
@@ -3302,8 +3238,7 @@ function uploadAndSetBgImage(imageData) {
         PropertiesService.getScriptProperties().setProperty('PRESENTATION_BG_ID', fileId);
         return { success: true, fileId: fileId };
     }
-    return { success: false, message: "Failed to save image to drive."
-    };
+    return { success: false, message: "Failed to save image to drive." };
 }
 
 // Function to retrieve the saved background image file ID
