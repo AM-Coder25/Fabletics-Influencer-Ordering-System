@@ -564,8 +564,11 @@
       $('#inventoryContent').off('click', '.btn-edit-stock').on('click', '.btn-edit-stock', function() { handleEditInventoryClick($(this)); });
       $('#inventoryContent').off('click', '.btn-delete-outfit').on('click', '.btn-delete-outfit', function() { handleDeleteOutfitClick($(this)); });
       $('#saveInventoryUpdateBtn').off('click').on('click', saveInventoryUpdate);
+      
       $('#syncInventoryChangesBtn').off('click').on('click', handleSyncInventoryChanges);
-
+      $('#copyOutfitBtn').off('click').on('click', handleCopyOutfitClick);
+      $('#confirmCopyOutfitBtn').off('click').on('click', executeCopyOutfit);
+      $('#confirmSyncBtn').off('click').on('click', executeSyncOutfit);
 
       $('#addNewOutfitBtn').off('click').on('click', handleAddNewOutfitClick);
       $('#addPieceBtn').off('click').on('click', addPieceRow);
@@ -618,6 +621,43 @@
                 .archiveCollection(collectionName);
         }
       });
+      
+      // MODIFIED: This is the corrected event handler for the "View" button
+      $('#existingCollectionsList').off('click', '.view-inventory-btn').on('click', '.view-inventory-btn', function() {
+        const collectionName = $(this).data('name');
+        if (!collectionName) {
+            displayMessage("Cannot view inventory: Collection name is missing.", "danger");
+            return;
+        }
+        
+        $('#manageCollectionsModal').modal('hide');
+        
+        setTimeout(() => {
+            // Manually set the state instead of relying on the main dropdown for navigation
+            currentCollectionName = collectionName;
+            
+            // For UI consistency, add the inactive collection to the dropdown and select it.
+            // This makes it clear to the user which collection they are viewing.
+            const collectionSelect = $('#collectionSelect');
+            if (collectionSelect.find('option[value="' + collectionName + '"]').length === 0) {
+                // Find if the collection is active to label it correctly
+                const collectionInfo = allCollectionsForDashboard.find(c => c.name === collectionName);
+                const label = collectionInfo && !collectionInfo.isActive ? ' (Inactive)' : '';
+                collectionSelect.append($('<option>', {
+                    value: collectionName,
+                    text: collectionName + label
+                }));
+            }
+            collectionSelect.val(collectionName);
+            
+            // Clear any old filters from a previous view
+            clearFilters(false); // Pass false to prevent reloading orders
+            
+            // Directly call the function that switches to the inventory view
+            handleViewInventoryClick(); 
+        }, 300);
+      });
+      
       $('#paginationControlsTop, #paginationControlsBottom').off('click', '.page-link').on('click', '.page-link', function(e) {
           e.preventDefault();
           handlePaginationClick($(this));
@@ -675,13 +715,14 @@
   }
 
   function handleViewInventoryClick() {
-       if (currentCollectionName && currentCollectionName !== '_all_active_') {
-           $('#mainDashboardStatsArea, #ordersArea, #filtersCard').hide(); 
-           $('#inventoryArea').show(); 
-           loadInventoryData(currentCollectionName);
-       } else {
-           displayMessage('Please select a specific collection first to view its inventory.', 'warning');
-       }
+      if (currentCollectionName && currentCollectionName !== '_all_active_') {
+          $('#initialMessage').hide(); // <-- This line is the fix
+          $('#mainDashboardStatsArea, #ordersArea, #filtersCard').hide(); 
+          $('#inventoryArea').show(); 
+          loadInventoryData(currentCollectionName);
+      } else {
+          displayMessage('Please select a specific collection first to view its inventory.', 'warning');
+      }
   }
 
     function handleEditInventoryClick($button) {
@@ -1418,13 +1459,7 @@
         currentOutfitImageIdForModal = null; 
         $('#inventoryUpdateModal').data('current-image-id', null); 
         
-        if (isCurrentUserAuthorized) {
-            $('#saveInventoryUpdateBtn').show();
-            $('#syncInventoryChangesBtn').show(); 
-        } else {
-            $('#saveInventoryUpdateBtn').hide();
-            $('#syncInventoryChangesBtn').hide();
-        }
+        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').hide();
 
         $('#inventoryUpdateModal').modal('show');
         google.script.run.withSuccessHandler(onInventoryUpdateDataLoaded).withFailureHandler(onFailure).getInventoryForOutfitUpdate(collectionName, outfitName);
@@ -1510,11 +1545,17 @@
              $(`#sw_${pieceIndexHtml}`).selectpicker('val', p.swapAvailableSizes||[]);
         });
          container.find('.selectpicker').selectpicker('render');
+
+        if (isCurrentUserAuthorized) {
+            $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').show();
+        } else {
+            $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').hide();
+        }
     }
 
     async function saveInventoryUpdate() {
         if (!isCurrentUserAuthorized) { displayMessage("Not authorized to save inventory.", "danger", 0); return; }
-        $('#inventoryUpdateSpinner').show(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', true); clearMessages();
+        $('#inventoryUpdateSpinner').show(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', true); clearMessages();
 
         const collName = $('#inventoryUpdateCollectionName').val();
         const outName = $('#inventoryUpdateOutfitNameHidden').val();
@@ -1566,20 +1607,20 @@
         } catch (e) { 
             displayMessage('Error reading image file.', 'danger', 0); 
             $('#inventoryUpdateSpinner').hide(); 
-            $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false); 
+            $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', false); 
             return; 
         }
         
         if (!formChanged && !imgData) {
              displayMessage('No changes detected to save.', 'info');
-             $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
+             $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', false);
              return;
         }
 
         if (!collName || !outName) { 
             displayMessage('Missing collection or outfit name for update.', 'danger', 0); 
             $('#inventoryUpdateSpinner').hide(); 
-            $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false); 
+            $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', false); 
             return; 
         }
         
@@ -1589,124 +1630,8 @@
             .updateInventoryItems(collName, outName, pieces, imgData, newIsActive, newQuickNote);
     }
     
-    async function handleSyncInventoryChanges() {
-        if (!isCurrentUserAuthorized) {
-            displayMessage("Not authorized to sync inventory.", "danger", 0);
-            return;
-        }
-        if (!currentCollectionName || currentCollectionName === '_all_active_') {
-             displayMessage("Cannot sync: current collection not specific.", "warning");
-             return;
-        }
-
-        const outfitName = $('#inventoryUpdateOutfitNameHidden').val();
-        if (!outfitName) {
-            displayMessage("Cannot sync: Outfit name is missing.", "warning");
-            return;
-        }
-
-        if (!confirm(`Are you sure you want to sync the current changes for outfit "${escapeHtml(outfitName)}" to ALL other ACTIVE collections where this outfit name already exists?\n\nThis will overwrite the outfit's details (pieces, image, active status, quick note) in those collections to match what is currently in this modal.\nThis outfit will NOT be created in active collections where it does not currently exist.\n\nThis action cannot be easily undone for other collections.`)) {
-            return;
-        }
-
-        $('#inventoryUpdateSpinner').show();
-        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', true);
-        clearMessages();
-
-        const piecesForSync = [];
-        $('#inventoryUpdateForm .piece-update-item').each(function(idxInModal) {
-            const item = $(this);
-            const originalPieceLoadedIndex = item.data('piece-index'); 
-            
-            const productName = item.data('product-name');
-            const category = item.data('category');
-            const originalSequence = parseInt(item.data('original-sequence'), 10);
-
-            const availableSizesVal = item.find(`select[name="pieces[${originalPieceLoadedIndex}][availableSizes]"]`).val();
-            const swapSizesVal = item.find(`select[name="pieces[${originalPieceLoadedIndex}][swapAvailableSizes]"]`).val();
-            
-            const pieceData = {
-                productName: productName,
-                sku: item.find(`input[name="pieces[${originalPieceLoadedIndex}][sku]"]`).val().trim(),
-                category: category,
-                color: item.find(`input[name="pieces[${originalPieceLoadedIndex}][color]"]`).val().trim(),
-                availableSizes: Array.isArray(availableSizesVal) ? availableSizesVal : (availableSizesVal ? [availableSizesVal] : []),
-                eta: item.find(`input[name="pieces[${originalPieceLoadedIndex}][eta]"]`).val(),
-                notes: item.find(`input[name="pieces[${originalPieceLoadedIndex}][notes]"]`).val().trim(),
-                swapSku: item.find(`input[name="pieces[${originalPieceLoadedIndex}][swapSku]"]`).val().trim(),
-                swapAvailableSizes: Array.isArray(swapSizesVal) ? swapSizesVal : (swapSizesVal ? [swapSizesVal] : []),
-                sequence: !isNaN(originalSequence) ? originalSequence : (idxInModal + 1) * 10
-            };
-            piecesForSync.push(pieceData);
-        });
-
-        let imageDataForSync = null;
-        const imgFile = $('#updateOutfitImage')[0].files[0];
-        let finalImageUrlForSync = $('#inventoryUpdateModal').data('current-image-id') || null;
-
-
-        if (imgFile) {
-            try {
-                imageDataForSync = await readFileAsBase64(imgFile);
-                // If new image data is being sent, server will save it and get a new ID.
-                // So, finalImageUrlForSync should effectively be null for server to know new image takes precedence.
-                finalImageUrlForSync = null; 
-            } catch (e) {
-                displayMessage('Error reading image file for sync.', 'danger', 0);
-                $('#inventoryUpdateSpinner').hide();
-                $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
-                return;
-            }
-        }
-        
-        const outfitDataForSync = {
-            originalCollectionName: $('#inventoryUpdateCollectionName').val(),
-            outfitName: outfitName,
-            newIsActiveStatus: $('#updateOutfitIsActive').prop('checked'),
-            newOutfitQuickNote: $('#updateOutfitQuickNote').val().trim(),
-            finalImageUrl: finalImageUrlForSync, 
-            imageData: imageDataForSync, 
-            pieces: piecesForSync
-        };
-
-        console.log("Data being sent for sync:", JSON.stringify(outfitDataForSync, null, 2));
-
-        google.script.run
-            .withSuccessHandler(onSyncOutfitSuccess)
-            .withFailureHandler(onSyncOutfitFailure)
-            .syncOutfitAcrossActiveCollections(outfitDataForSync);
-    }
-
-    function onSyncOutfitSuccess(result) {
-        $('#inventoryUpdateSpinner').hide();
-        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
-        if (result?.success) {
-            $('#inventoryUpdateModal').modal('hide'); // Close modal on successful sync
-            displayMessage(result.message || 'Outfit synced successfully!', 'success', 7000);
-             // Clear file input after successful sync processing
-            $('#updateOutfitImage').val('');
-            currentOutfitImageIdForModal = null; // Reset after modal closes or successful operation
-            $('#inventoryUpdateModal').data('current-image-id', null);
-
-
-            if (currentCollectionName && currentCollectionName !== '_all_active_') {
-                loadInventoryData(currentCollectionName); 
-            }
-        } else {
-            displayMessage(result.message || 'Failed to sync outfit changes.', 'danger', 0);
-        }
-    }
-
-    function onSyncOutfitFailure(error) {
-        $('#inventoryUpdateSpinner').hide();
-        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
-        onFailure(error); 
-        displayMessage('Error syncing outfit updates. See console/logs.', 'danger', 0);
-    }
-
-
     function onInventorySaveSuccess(result) {
-        $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false);
+        $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', false);
         if (result?.success) {
             $('#inventoryUpdateModal').modal('hide');
             displayMessage(result.message || 'Inventory updated!', 'success');
@@ -1720,7 +1645,7 @@
             displayMessage(result.message || 'Failed to save inventory changes.', 'danger', 0);
         }
     }
-    function onInventorySaveFailure(error) { $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn').prop('disabled', false); onFailure(error); displayMessage('Error saving inventory updates.', 'danger', 0); }
+    function onInventorySaveFailure(error) { $('#inventoryUpdateSpinner').hide(); $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', false); onFailure(error); displayMessage('Error saving inventory updates.', 'danger', 0); }
     function onDeleteOutfitSuccess(result) { hideLoading(); if (result?.success) { displayMessage(result.message || 'Outfit deleted.', 'success'); if (currentCollectionName && currentCollectionName !== '_all_active_') loadInventoryData(currentCollectionName); } else { displayMessage(result.message || 'Failed to delete outfit.', 'danger'); } }
 
     // --- Add Outfit Modal Functions ---
@@ -2003,22 +1928,43 @@
         google.script.run.withSuccessHandler(populateCollectionsModal).withFailureHandler(onFailure).getCollectionsList();
     }
 
+    // MODIFIED: This function now handles the 'isArchived' flag and adds the new 'View Inventory' button.
     function populateCollectionsModal(collections) {
         hideLoading();
-        allCollectionsForDashboard = collections || []; 
+        allCollectionsForDashboard = collections || [];
         const listContainer = $('#existingCollectionsList'); listContainer.empty();
         if (!collections || collections.length === 0) { listContainer.append('<p class="text-muted">No collections defined yet.</p>'); return; }
 
-        let tableHtml = '<table class="table table-sm table-striped table-hover"><thead><tr><th>Name</th><th>Promo Code</th><th>Active</th>';
-        if (isCurrentUserAuthorized) { tableHtml += '<th>Actions</th>'; }
+        let tableHtml = '<table class="table table-sm table-striped table-hover"><thead><tr><th>Name</th><th>Promo Code</th><th>Status</th>';
+        if (isCurrentUserAuthorized) { tableHtml += '<th class="text-right">Actions</th>'; }
         tableHtml += '</tr></thead><tbody>';
+        
         collections.forEach(c => {
-            const activeBadge = c.isActive ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-secondary">No</span>';
-            tableHtml += `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.promoCode || '-')}</td><td>${activeBadge}</td>`;
+            let statusBadge;
+            if (c.isArchived) {
+                statusBadge = '<span class="badge badge-dark">Archived</span>';
+            } else if (c.isActive) {
+                statusBadge = '<span class="badge badge-success">Active</span>';
+            } else {
+                statusBadge = '<span class="badge badge-secondary">Inactive</span>';
+            }
+
+            tableHtml += `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.promoCode || '-')}</td><td>${statusBadge}</td>`;
             if (isCurrentUserAuthorized) {
-                let actionsHtml = `<button class="btn btn-xs btn-outline-primary edit-collection-btn mr-1" data-name="${escapeHtml(c.name)}" data-promo="${escapeHtml(c.promoCode || '')}" data-active="${c.isActive}"><i class="fas fa-pencil-alt"></i> Edit</button>`;
-                if (!c.isActive) { 
-                    actionsHtml += `<button class="btn btn-xs btn-outline-warning archive-collection-btn" data-name="${escapeHtml(c.name)}"><i class="fas fa-archive"></i> Archive</button>`;
+                let actionsHtml = '';
+                if (c.isArchived) {
+                    actionsHtml = '<span class="text-muted small"><em>No actions available</em></span>';
+                } else {
+                    // View/Edit Inventory Button (for all non-archived)
+                    actionsHtml += `<button class="btn btn-xs btn-outline-info view-inventory-btn mr-1" data-name="${escapeHtml(c.name)}" title="View/Edit Inventory"><i class="fas fa-boxes"></i> View</button>`;
+                    
+                    // Edit Button
+                    actionsHtml += `<button class="btn btn-xs btn-outline-primary edit-collection-btn mr-1" data-name="${escapeHtml(c.name)}" data-promo="${escapeHtml(c.promoCode || '')}" data-active="${c.isActive}"><i class="fas fa-pencil-alt"></i> Edit</button>`;
+                    
+                    // Archive Button (only if inactive)
+                    if (!c.isActive) {
+                        actionsHtml += `<button class="btn btn-xs btn-outline-warning archive-collection-btn" data-name="${escapeHtml(c.name)}"><i class="fas fa-archive"></i> Archive</button>`;
+                    }
                 }
                 tableHtml += `<td class="text-right">${actionsHtml}</td>`;
             }
@@ -2027,6 +1973,7 @@
         tableHtml += '</tbody></table>'; listContainer.html(tableHtml);
         resetCollectionForm();
     }
+
 
     function prepareCollectionFormForEdit(name, promo, active) {
         $('#collectionFormTitle').text('Edit Collection'); $('#editCollectionOriginalName').val(name); $('#collectionNameInput').val(name); $('#collectionPromoCodeInput').val(promo); $('#collectionIsActiveInput').prop('checked', active); $('#saveCollectionBtn').html('<i class="fas fa-save"></i> Save Changes').removeClass('btn-success').addClass('btn-primary'); $('#cancelEditCollectionBtn').show(); $('#collectionNameInput').focus(); $('#addEditCollectionForm').removeClass('was-validated');
@@ -2061,18 +2008,22 @@
             google.script.run.withSuccessHandler(onCollectionSaveSuccess).withFailureHandler(onCollectionSaveFailure).addNewCollection(collectionData);
         }
     }
+    
     function onCollectionSaveSuccess(result) {
         $('#saveCollectionSpinner').hide();
         if (result && result.success) {
             displayMessage(result.message, 'success');
             resetCollectionForm();
+            // Reload the list in the modal after saving
             google.script.run.withSuccessHandler(populateCollectionsModal).withFailureHandler(onFailure).getCollectionsList();
+            // Reload main page selectors
             google.script.run.withSuccessHandler(collections => {
                  activeCollections = collections;
                  populateCollectionSelector();
+                 // Logic to reset view if the currently viewed collection was modified/deactivated
                  if (currentCollectionName && currentCollectionName !== '_all_active_') {
-                    const stillExists = activeCollections.find(c => c.name === currentCollectionName);
-                    if (!stillExists) {
+                    const stillExistsAsActive = activeCollections.find(c => c.name === currentCollectionName);
+                    if (!stillExistsAsActive) {
                          $('#collectionSelect').val('_all_active_').trigger('change');
                     }
                  } else {
@@ -2081,6 +2032,7 @@
             }).withFailureHandler(onFailure).getActiveCollections();
         } else { displayMessage(result.message || "Failed to save collection.", 'danger'); }
     }
+    
     function onCollectionSaveFailure(error) { $('#saveCollectionSpinner').hide(); onFailure(error); displayMessage("Error saving collection. See console/logs.", "danger"); }
 
     function onArchiveCollectionSuccess(result) {
@@ -2103,8 +2055,235 @@
     }
     function onArchiveCollectionFailure(error) { hideLoading(); onFailure(error); displayMessage(`Error during archiving: ${error.message || 'Unknown error.'}`, 'danger'); }
 
-  // --- CSV, Raw Data, and General Failure ---
-  function onRawDataUploaded(result) { hideLoading(); resetFileInput(); if (result && result.success) { displayMessage(result.message || "File uploaded. Ready to process.", "success", 8000); }  else { displayMessage(result.message || "Failed to upload data.", "danger"); } }
+    // --- NEW: Functions for Copy/Sync Workflow ---
+    
+    /**
+     * NEW UTILITY: Gathers all data from the inventory update modal.
+     * This is used by both Sync and Copy operations.
+     * @returns {object} An object containing the full definition of the outfit being edited.
+     */
+    async function getOutfitDataFromUpdateModal() {
+        const outfitData = {
+            originalCollectionName: $('#inventoryUpdateCollectionName').val(),
+            outfitName: $('#inventoryUpdateOutfitNameHidden').val(),
+            newIsActiveStatus: $('#updateOutfitIsActive').prop('checked'),
+            newOutfitQuickNote: $('#updateOutfitQuickNote').val().trim(),
+            finalImageUrl: $('#inventoryUpdateModal').data('current-image-id') || null,
+            pieces: []
+        };
+    
+        $('#inventoryUpdateForm .piece-update-item').each(function(idxInModal) {
+            const item = $(this);
+            const i = item.data('piece-index');
+            const availableSizesVal = item.find(`select[name="pieces[${i}][availableSizes]"]`).val();
+            const swapSizesVal = item.find(`select[name="pieces[${i}][swapAvailableSizes]"]`).val();
+    
+            outfitData.pieces.push({
+                sequence: (idxInModal + 1) * 10,
+                productName: item.data('product-name'),
+                category: item.data('category'),
+                sku: item.find(`input[name="pieces[${i}][sku]"]`).val().trim(),
+                color: item.find(`input[name="pieces[${i}][color]"]`).val().trim(),
+                eta: item.find(`input[name="pieces[${i}][eta]"]`).val(),
+                notes: item.find(`input[name="pieces[${i}][notes]"]`).val().trim(),
+                swapSku: item.find(`input[name="pieces[${i}][swapSku]"]`).val().trim(),
+                availableSizes: Array.isArray(availableSizesVal) ? availableSizesVal : (availableSizesVal ? [availableSizesVal] : []),
+                swapAvailableSizes: Array.isArray(swapSizesVal) ? swapSizesVal : (swapSizesVal ? [swapSizesVal] : [])
+            });
+        });
+    
+        // Handle potential new image upload
+        const imgFile = $('#updateOutfitImage')[0].files[0];
+        if (imgFile) {
+            try {
+                outfitData.imageData = await readFileAsBase64(imgFile);
+            } catch(e) {
+                console.error("Error reading image file for packaging:", e);
+                outfitData.imageData = null;
+            }
+        } else {
+            outfitData.imageData = null;
+        }
+        
+        return outfitData;
+    }
+
+    /**
+     * NEW: Handles the click on the "Sync to Active Collections" button.
+     * It now fetches a list of potential targets first.
+     */
+    function handleSyncInventoryChanges() {
+        if (!isCurrentUserAuthorized) {
+            displayMessage("Not authorized to sync inventory.", "danger", 0);
+            return;
+        }
+        const outfitName = $('#inventoryUpdateOutfitNameHidden').val();
+        if (!outfitName) {
+            displayMessage("Cannot sync: Outfit name is missing.", "warning");
+            return;
+        }
+    
+        $('#inventoryUpdateSpinner').show();
+        google.script.run
+            .withSuccessHandler(function(targetCollections) {
+                $('#inventoryUpdateSpinner').hide();
+                if (targetCollections && targetCollections.length > 0) {
+                    const container = $('#syncTargetsContainer');
+                    container.empty();
+                    $('#syncOutfitName').text(outfitName);
+                    
+                    targetCollections.forEach(collName => {
+                        const isOriginalCollection = (collName === $('#inventoryUpdateCollectionName').val());
+                        container.append(`
+                            <div class="form-check">
+                              <input class="form-check-input" type="checkbox" value="${escapeHtml(collName)}" id="sync_to_${escapeHtml(collName.replace(/\s/g, ''))}" checked>
+                              <label class="form-check-label" for="sync_to_${escapeHtml(collName.replace(/\s/g, ''))}">
+                                ${escapeHtml(collName)} ${isOriginalCollection ? '<span class="badge badge-info small">Source</span>' : ''}
+                              </label>
+                            </div>
+                        `);
+                    });
+    
+                    $('#syncConfirmationModal').modal('show');
+                } else {
+                    displayMessage(`No other active collections found containing the outfit "${escapeHtml(outfitName)}".`, 'info');
+                }
+            })
+            .withFailureHandler(onFailure)
+            .getSyncTargetsForOutfit(outfitName);
+    }
+
+    /**
+     * NEW: Executes the sync after user confirms targets in the modal.
+     */
+    async function executeSyncOutfit() {
+        $('#syncConfirmSpinner').show();
+        $('#confirmSyncBtn').prop('disabled', true);
+        
+        const selectedCollections = [];
+        $('#syncTargetsContainer .form-check-input:checked').each(function() {
+            selectedCollections.push($(this).val());
+        });
+    
+        if (selectedCollections.length === 0) {
+            displayMessage("No collections selected to sync.", "warning");
+            $('#syncConfirmSpinner').hide();
+            $('#confirmSyncBtn').prop('disabled', false);
+            return;
+        }
+        
+        const outfitData = await getOutfitDataFromUpdateModal();
+    
+        // Call the modified server-side function
+        google.script.run
+            .withSuccessHandler(onSyncOutfitSuccess)
+            .withFailureHandler(onSyncOutfitFailure)
+            .syncOutfitAcrossActiveCollections(outfitData, selectedCollections);
+    }
+    
+    /**
+     * NEW: Handles the click on the "Copy to Collection" button.
+     */
+    function handleCopyOutfitClick() {
+        if (!isCurrentUserAuthorized) {
+            displayMessage("Not authorized.", "danger");
+            return;
+        }
+        const outfitName = $('#inventoryUpdateOutfitNameHidden').val();
+        $('#copyOutfitName').text(outfitName);
+        $('#copyOutfitWarning').hide().empty();
+        showLoading('Fetching available collections...');
+    
+        google.script.run
+            .withSuccessHandler(function(collections) {
+                hideLoading();
+                const select = $('#copyDestinationCollections');
+                select.empty();
+                if (collections && collections.length > 0) {
+                    const sourceCollection = $('#inventoryUpdateCollectionName').val();
+                    collections.forEach(c => {
+                        if (c.name !== sourceCollection) {
+                           select.append($('<option>', { value: c.name, text: c.name }));
+                        }
+                    });
+                }
+                select.selectpicker('refresh');
+                $('#copyOutfitModal').modal('show');
+            })
+            .withFailureHandler(onFailure)
+            .getAllNonArchivedCollections();
+    }
+    
+    /**
+     * NEW: Executes the copy after user confirms in the modal.
+     */
+    async function executeCopyOutfit() {
+        const targetCollections = $('#copyDestinationCollections').val();
+        if (!targetCollections || targetCollections.length === 0) {
+            displayMessage("Please select at least one destination collection.", "warning");
+            return;
+        }
+    
+        $('#copyOutfitSpinner').show();
+        $('#confirmCopyOutfitBtn').prop('disabled', true);
+    
+        const outfitData = await getOutfitDataFromUpdateModal();
+    
+        google.script.run
+            .withSuccessHandler(function(result){
+                $('#copyOutfitSpinner').hide();
+                $('#confirmCopyOutfitBtn').prop('disabled', false);
+                if(result.success) {
+                    displayMessage(result.message, 'success', 8000);
+                    $('#copyOutfitModal').modal('hide');
+                } else {
+                    displayMessage(result.message, 'danger', 0);
+                }
+            })
+            .withFailureHandler(function(err){
+                onFailure(err);
+                $('#copyOutfitSpinner').hide();
+                $('#confirmCopyOutfitBtn').prop('disabled', false);
+            })
+            .copyOutfitToCollections(outfitData, targetCollections);
+    }
+    
+    /**
+     * MODIFIED: Callback for sync success.
+     */
+    function onSyncOutfitSuccess(result) {
+        $('#inventoryUpdateSpinner').hide();
+        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', false);
+        $('#syncConfirmSpinner').hide();
+        $('#confirmSyncBtn').prop('disabled', false);
+    
+        if (result?.success) {
+            $('#inventoryUpdateModal').modal('hide');
+            $('#syncConfirmationModal').modal('hide'); // Close the sync modal
+            displayMessage(result.message || 'Outfit synced successfully!', 'success', 7000);
+            $('#updateOutfitImage').val('');
+            currentOutfitImageIdForModal = null;
+            $('#inventoryUpdateModal').data('current-image-id', null);
+    
+            if (currentCollectionName && currentCollectionName !== '_all_active_') {
+                loadInventoryData(currentCollectionName); 
+            }
+        } else {
+            displayMessage(result.message || 'Failed to sync outfit changes.', 'danger', 0);
+        }
+    }
+    
+    function onSyncOutfitFailure(error) {
+        $('#inventoryUpdateSpinner').hide();
+        $('#saveInventoryUpdateBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', false);
+        $('#syncConfirmSpinner').hide();
+        $('#confirmSyncBtn').prop('disabled', false);
+        onFailure(error);
+        displayMessage('Error syncing outfit updates. See console/logs.', 'danger', 0);
+    }
+
+    // --- CSV, Raw Data, and General Failure ---
+    function onRawDataUploaded(result) { hideLoading(); resetFileInput(); if (result && result.success) { displayMessage(result.message || "File uploaded. Ready to process.", "success", 8000); }  else { displayMessage(result.message || "Failed to upload data.", "danger"); } }
     function resetFileInput() { $('#rawFileUploadInput').val(null); } 
 
     function onProductListUploaded(result) {
@@ -2162,7 +2341,7 @@
      isLoadingOrders = false;
      hideLoading();
      $('#modalSpinner, #inventoryUpdateSpinner, #addOutfitSpinner, #addProductSpinner, #saveCollectionSpinner').hide();
-     $('#saveOrderDetailsBtn, #saveInventoryUpdateBtn, #saveNewOutfitBtn, #saveProductBtn, #saveCollectionBtn, #syncInventoryChangesBtn').prop('disabled', false);
+     $('#saveOrderDetailsBtn, #saveInventoryUpdateBtn, #saveNewOutfitBtn, #saveProductBtn, #saveCollectionBtn, #syncInventoryChangesBtn, #copyOutfitBtn').prop('disabled', false);
 
      console.error('Server Script Error:', error);
      let message = `Error: ${error.message || 'An unknown server error occurred.'}`;
