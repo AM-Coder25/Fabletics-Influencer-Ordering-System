@@ -126,7 +126,17 @@
         } else {
             $('#mainDashboardContent').html('<p class="text-center text-muted w-100">No active collections found for key metrics.</p>');
         }
-        google.script.run.withFailureHandler(onFailure).logActivity("VIEW_ACCESS", "Loaded Main Orders Page"); 
+        google.script.run.withFailureHandler(onFailure).logActivity("VIEW_ACCESS", "Loaded Main Orders Page");
+
+        // ADDED FOR DEEP LINKING
+        if (initialOrderId) {
+            console.log("Deep link detected for OrderID:", initialOrderId);
+            // We use a small timeout to allow the main UI to settle before popping the modal
+            setTimeout(function() {
+                loadAndShowOrderModal(initialOrderId);
+            }, 500);
+        }
+
         hideLoading();
     }).withFailureHandler(onFailure).getCollectionsList(); 
     $('#initialMessage').text('Displaying Key Metrics for All Active Collections. Select a specific collection to view orders.').show();
@@ -615,24 +625,37 @@
   }
 
   // --- Event Handler Functions ---
+
+  // ADDED FOR DEEP LINKING
+  /**
+   * Loads the details for a specific order and displays them in the modal.
+   * @param {string} orderId The ID of the order to load.
+   */
+  function loadAndShowOrderModal(orderId) {
+    if (!orderId) {
+      console.error("loadAndShowOrderModal called with no orderId.");
+      return;
+    }
+    clearMessages();
+    $('#modalDuplicateWarning').hide();
+    
+    showLoading('Loading order details...');
+    google.script.run
+        .withSuccessHandler(onOrderDetailsLoaded)
+        .withFailureHandler(onFailure)
+        .getOrderDetails(orderId);
+  }
   
+  // REFACTORED FOR DEEP LINKING
   function handleEditOrderClick($button) {
-      clearMessages();
-      const orderId = $button.data('order-id');
-      if (!orderId) { console.error("Order ID missing from button:", $button); displayMessage("Cannot load order: ID missing.", "danger"); return; }
+    const orderId = $button.data('order-id');
+    const $currentRow = $button.closest('tr');
+    
+    clearEditHighlight();
+    $currentRow.addClass('table-row-editing');
+    currentlyEditingRow = $currentRow;
 
-      const $currentRow = $button.closest('tr');
-      clearEditHighlight(); 
-      $currentRow.addClass('table-row-editing'); 
-      currentlyEditingRow = $currentRow;
-
-      $('#modalDuplicateWarning').hide(); $('#modalOtherOrderIds').text('');
-      
-      showLoading('Loading order details...');
-      google.script.run
-          .withSuccessHandler(onOrderDetailsLoaded)
-          .withFailureHandler(onFailure)
-          .getOrderDetails(orderId);
+    loadAndShowOrderModal(orderId);
   }
 
   function clearEditHighlight() {
