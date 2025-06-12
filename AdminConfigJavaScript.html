@@ -44,6 +44,7 @@
                  $('#recentErrorsTableContainer').html('<p class="text-danger small">Error loading recent errors.</p>');
                  $('#configOptionsTableContainer').html('<p class="text-danger small">Error loading config options.</p>');
                  $('#detailedActivityLogTableContainer').html('<p class="text-danger small">Error loading detailed activity log.</p>');
+                 $('#detailedChangeLogTableContainer').html('<p class="text-danger small">Error loading detailed change log.</p>'); // ADDED
             }
             return;
         }
@@ -53,6 +54,7 @@
         populateRecentErrorsTable(data.recentErrors);
         populateConfigOptionsTable(data.configOptions);
         populateDetailedActivityLogTable(data.detailedActivityLog);
+        populateDetailedChangeLogTable(data.detailedChangeLog); // ADDED
         populateCurrentBgImage(data.bgImageFileId);
     }
 
@@ -171,6 +173,29 @@
         table += '</tbody></table>'; container.html(table);
     }
 
+    // ADDED FOR CHANGE LOG
+    function populateDetailedChangeLogTable(logEntries) {
+        const container = $('#detailedChangeLogTableContainer');
+        container.empty();
+        if (!logEntries || logEntries.length === 0) {
+            container.append('<p class="text-muted small font-italic">No field changes logged recently.</p>');
+            return;
+        }
+        let table = '<table id="detailedChangeLogTable" class="table table-sm table-borderless table-striped small"><thead><tr><th>Timestamp</th><th>User</th><th>Order ID</th><th>Collection</th><th>Field</th><th>Old Value</th><th>New Value</th></tr></thead><tbody>';
+        logEntries.forEach(entry => {
+            table += `<tr>
+                        <td>${escapeHtml(entry.timestamp)}</td>
+                        <td>${escapeHtml(entry.userEmail)}</td>
+                        <td><small>${escapeHtml(entry.orderId)}</small></td>
+                        <td>${escapeHtml(entry.collectionName)}</td>
+                        <td><span class="badge badge-info">${escapeHtml(entry.fieldName)}</span></td>
+                        <td style="word-break: break-all;">${escapeHtml(entry.oldValue)}</td>
+                        <td style="word-break: break-all;">${escapeHtml(entry.newValue)}</td>
+                      </tr>`;
+        });
+        table += '</tbody></table>';
+        container.html(table);
+    }
 
     // --- Event Listeners Setup ---
     function setupAdminEventListeners() {
@@ -190,6 +215,12 @@
         $('#refreshDetailedActivityLogBtn').on('click', () => { 
             showAdminLoading('Refreshing detailed activity log...');
             google.script.run.withSuccessHandler(data => { hideAdminLoading(); populateDetailedActivityLogTable(data.detailedActivityLog);}).withFailureHandler(onAdminFailure).getAdminDashboardData();
+        });
+
+        // ADDED FOR CHANGE LOG
+        $('#refreshDetailedChangeLogBtn').on('click', () => { 
+            showAdminLoading('Refreshing detailed change log...');
+            google.script.run.withSuccessHandler(data => { hideAdminLoading(); populateDetailedChangeLogTable(data.detailedChangeLog);}).withFailureHandler(onAdminFailure).getAdminDashboardData();
         });
         
         // Cache Buttons 
@@ -250,6 +281,7 @@
                     $('#bgSpinner').hide();
                     $('#saveBgImageBtn').prop('disabled', false);
                     $('#adminBgImageUpload').val(''); // Clear file input
+                    $('.custom-file-label').html('Choose file...'); // ADDED for UI bug fix
                     if (res.success) {
                         displayAdminMessage("Background image updated successfully!", "success");
                         populateCurrentBgImage(res.fileId);
@@ -263,6 +295,12 @@
                 }).uploadAndSetBgImage(imageData);
             };
             reader.readAsDataURL(file);
+        });
+
+        // ADDED FOR CUSTOM FILE INPUT LABEL
+        $('#adminBgImageUpload').on('change', function() {
+            var fileName = $(this).val().split('\\').pop();
+            $(this).siblings('.custom-file-label').addClass("selected").html(fileName || 'Choose file...');
         });
         
         // Config Option Form
