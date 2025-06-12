@@ -434,6 +434,7 @@
            <div class="modal-footer">
                <span id="inventoryUpdateSpinner" class="spinner-border spinner-border-sm text-primary mr-2" role="status" style="display: none;"></span>
                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+               <button type="button" class="btn btn-purple" id="copyOutfitBtn" style="display: none; margin-right: 5px;"><i class="fas fa-copy"></i> Copy to Collection</button>
                <button type="button" class="btn btn-info" id="syncInventoryChangesBtn" style="display: none; margin-right: 5px;"><i class="fas fa-sync-alt"></i> Sync to Active Collections</button>
                <button type="button" class="btn btn-primary" id="saveInventoryUpdateBtn">Save Inventory Changes</button>
            </div>
@@ -557,6 +558,52 @@
          </div>
        </div>
      </div>
+     
+    <div class="modal fade" id="copyOutfitModal" tabindex="-1" role="dialog" aria-labelledby="copyOutfitModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="copyOutfitModalLabel">Copy Outfit to Collections</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+          </div>
+          <div class="modal-body">
+            <p>Select one or more collections to copy the outfit '<strong id="copyOutfitName"></strong>' to.</p>
+            <div class="form-group">
+              <label for="copyDestinationCollections">Destination Collections (non-archived):</label>
+              <select id="copyDestinationCollections" class="form-control selectpicker" multiple data-live-search="true" data-actions-box="true" title="Choose collections...">
+              </select>
+            </div>
+            <div id="copyOutfitWarning" class="alert alert-warning mt-2" style="display:none;"></div>
+          </div>
+          <div class="modal-footer">
+            <span id="copyOutfitSpinner" class="spinner-border spinner-border-sm text-primary mr-2" role="status" style="display: none;"></span>
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirmCopyOutfitBtn">Confirm Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="syncConfirmationModal" tabindex="-1" role="dialog" aria-labelledby="syncConfirmationModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="syncConfirmationModalLabel">Confirm Sync Targets</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p>The outfit '<strong id="syncOutfitName"></strong>' was found in the following active collections. Please select which ones you want to synchronize with your current changes.</p>
+                    <div id="syncTargetsContainer">
+                        </div>
+                </div>
+                <div class="modal-footer">
+                    <span id="syncConfirmSpinner" class="spinner-border spinner-border-sm text-primary mr-2" role="status" style="display: none;"></span>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmSyncBtn">Sync Selected</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-LtrjvnR4Twt/qOuYxE721u19sVFLVSA4hf/rRt6PrZTmiPltdZcI7q7PXQBYTKyf" crossorigin="anonymous"></script>
